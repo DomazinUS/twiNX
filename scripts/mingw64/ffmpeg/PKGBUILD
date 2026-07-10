@@ -1,0 +1,86 @@
+# Maintainer: Alexey Pavlov <Alexpux@gmail.com>
+# Contributor: Zach Bacon <11doctorwhocanada@gmail.com>
+# Contributor: wirx6 <wirx654@gmail.com>
+# Contributor: Ray Donnelly <mingw.android@gmail.com>
+
+_realname=ffmpeg
+pkgbase="mingw-w64-${_realname}"
+pkgname="${MINGW_PACKAGE_PREFIX}-${_realname}"
+pkgver=8.1.2
+pkgrel=3
+pkgdesc="Complete solution to record, convert and stream audio and video (mingw-w64)"
+arch=('any')
+mingw_arch=('mingw32' 'mingw64' 'clangarm64')
+url="https://ffmpeg.org/"
+license=('spdx:GPL-3.0-or-later')
+depends=(
+  "${MINGW_PACKAGE_PREFIX}-bzip2"
+  "${MINGW_PACKAGE_PREFIX}-fribidi"
+  "${MINGW_PACKAGE_PREFIX}-freetype"
+  "${MINGW_PACKAGE_PREFIX}-dav1d"
+  "${MINGW_PACKAGE_PREFIX}-libass"
+  "${MINGW_PACKAGE_PREFIX}-libssh2-mbedtls"
+  "${MINGW_PACKAGE_PREFIX}-zlib"
+)
+makedepends=(
+  "${MINGW_PACKAGE_PREFIX}-cc"
+  "${MINGW_PACKAGE_PREFIX}-pkgconf"
+  "${MINGW_PACKAGE_PREFIX}-ffnvcodec-headers"
+  "${MINGW_PACKAGE_PREFIX}-nasm"
+)
+options=('staticlibs' '!strip')
+source=("https://ffmpeg.org/releases/${_realname}-${pkgver}.tar.xz" "avio.patch")
+sha256sums=('464beb5e7bf0c311e68b45ae2f04e9cc2af88851abb4082231742a74d97b524c' 'SKIP')
+
+prepare() {
+  cd ${_realname}-${pkgver}
+  patch -Np1 -i "$srcdir/avio.patch"
+}
+
+build() {
+  mkdir -p "${srcdir}/build-${MSYSTEM}" && cd "${srcdir}/build-${MSYSTEM}"
+  ${srcdir}/${_realname}-${pkgver}/configure \
+    --prefix=${MINGW_PREFIX} \
+    --target-os=mingw32 \
+    --arch=${CARCH%%-*} \
+    --cc=${CC} \
+    --cxx=${CXX} \
+    --disable-shared \
+    --enable-static \
+    --pkg-config-flags=-static \
+    --enable-runtime-cpudetect \
+    --disable-autodetect \
+    --enable-pic \
+    --disable-programs \
+    --disable-debug \
+    --disable-doc \
+    --disable-avdevice \
+    --disable-encoders \
+    --disable-muxers \
+    --disable-filters \
+    --enable-filter=hflip,vflip,transpose \
+    --enable-swscale \
+    --enable-swresample \
+    --enable-network  \
+    --enable-dxva2 \
+    --enable-d3d11va \
+    --enable-zlib \
+    --enable-bzlib \
+    --enable-libass \
+    --enable-libdav1d \
+    --enable-libssh2 \
+    --enable-mbedtls \
+    --enable-version3 \
+    --enable-nvdec \
+    --enable-ffnvcodec
+
+  make -j4
+}
+
+package() {
+  cd "${srcdir}/build-${MSYSTEM}"
+  make DESTDIR="${pkgdir}" install
+
+  local PREFIX_DEPS=$(cygpath -am ${MINGW_PREFIX})
+  find ${pkgdir}${MINGW_PREFIX}/lib/pkgconfig -name *.pc -exec sed -i -e"s|${PREFIX_DEPS}|${MINGW_PREFIX}|g" {} \;
+}

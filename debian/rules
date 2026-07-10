@@ -1,0 +1,43 @@
+#!/usr/bin/make -f
+
+TMPDIR ?= /tmp
+
+include /usr/share/dpkg/architecture.mk
+
+WAYLAND := $(if $(shell dpkg -s libxkbcommon-dev 2>/dev/null),ON,OFF)
+ifneq ($(DEB_BUILD_ARCH),amd64)
+	CMAKE_FLAGS=-DUSE_GLES3=ON
+endif
+
+curl:
+	wget -qO- https://curl.se/download/curl-8.16.0.tar.xz | tar Jxf - -C $(TMPDIR)
+	cmake -B build-curl -G Ninja -S $(TMPDIR)/curl-8.16.0 -DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_SHARED_LIBS=OFF -DHTTP_ONLY=ON -DCURL_DISABLE_PROGRESS_METER=ON -DCURL_USE_OPENSSL=ON \
+		-DBUILD_CURL_EXE=OFF -DUSE_NGHTTP2=OFF -DBUILD_TESTING=OFF -DBUILD_EXAMPLES=OFF \
+		-DBUILD_LIBCURL_DOCS=OFF -DBUILD_MISC_DOCS=OFF -DENABLE_CURL_MANUAL=OFF \
+		-DUSE_LIBIDN2=OFF -DCURL_USE_LIBSSH2=OFF -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF -DCURL_USE_LIBPSL=OFF
+	cmake --build build-curl
+	cmake --install build-curl
+
+glfw:
+	wget -qO- https://github.com/dragonflylee/glfw/archive/switchfin.tar.gz | tar zxf - -C $(TMPDIR)
+	cmake -P $(TMPDIR)/glfw-switchfin/CMake/GenerateMappings.cmake \
+		$(TMPDIR)/glfw-switchfin/src/mappings.h.in $(TMPDIR)/glfw-switchfin/src/mappings.h
+	cmake -B build-glfw -G Ninja -S $(TMPDIR)/glfw-switchfin -DCMAKE_BUILD_TYPE=Release \
+		-DBUILD_SHARED_LIBS=OFF -DGLFW_BUILD_X11=ON -DGLFW_BUILD_WAYLAND=$(WAYLAND) \
+		-DGLFW_BUILD_EXAMPLES=OFF -DGLFW_BUILD_TESTS=OFF -DGLFW_BUILD_DOCS=OFF
+	cmake --build build-glfw
+	cmake --install build-glfw
+
+%:
+	dh $@ --buildsystem=cmake+ninja --builddirectory=build
+
+override_dh_auto_configure: curl glfw
+	dh_auto_configure -- \
+		-DCMAKE_INSTALL_PREFIX=/usr \
+		-DPLATFORM_DESKTOP=ON \
+		-DCMAKE_INSTALL=ON \
+		-DUSE_SYSTEM_GLFW=ON \
+		-DUSE_SYSTEM_CURL=ON $(CMAKE_FLAGS)
+
+override_dh_auto_test:

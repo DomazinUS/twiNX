@@ -1,0 +1,85 @@
+###############################################################################
+# CMake module to search for the mpv libraries.
+#
+# WARNING: This module is experimental work in progress.
+#
+# Based one FindVLC.cmake by:
+# Copyright (c) 2011 Michael Jansen <info@michael-jansen.biz>
+# Modified by Tobias Hieta <tobias@hieta.se>
+#
+# Redistribution and use is allowed according to the terms of the BSD license.
+# For details see the accompanying COPYING-CMAKE-SCRIPTS file.
+#
+###############################################################################
+
+#
+### Global Configuration Section
+#
+SET(_MPV_REQUIRED_VARS MPV_INCLUDE_DIR MPV_LIBRARY)
+
+#
+### MPV uses pkgconfig.
+#
+find_package(PkgConfig QUIET)
+if (PKG_CONFIG_FOUND)
+    pkg_check_modules(PC_MPV QUIET mpv)
+endif (PKG_CONFIG_FOUND)
+
+#
+### Look for the include files.
+#
+find_path(
+    MPV_INCLUDE_DIR
+    NAMES mpv/client.h
+    HINTS
+        ${CMAKE_PREFIX_PATH}/include
+        ${PC_MPV_INCLUDEDIR}
+        ${PC_MPV_INCLUDE_DIRS} # Unused for MPV but anyway
+    DOC "MPV include directory"
+)
+
+#
+### Look for the libraries
+#
+set(_MPV_LIBRARY_NAMES mpv)
+if (PC_MPV_LIBRARIES)
+    list(REMOVE_DUPLICATES PC_MPV_LIBRARIES)
+    set(_MPV_LIBRARY_NAMES ${PC_MPV_LIBRARIES})
+endif ()
+
+foreach(l ${_MPV_LIBRARY_NAMES})
+    find_library(
+        MPV_LIBRARY_${l}
+        NAMES ${l}
+        HINTS
+            ${CMAKE_PREFIX_PATH}/lib
+            ${PC_MPV_LIBDIR}
+            ${PC_MPV_LIBRARY_DIRS} # Unused for MPV but anyway
+        PATH_SUFFIXES lib${LIB_SUFFIX}
+    )
+    list(APPEND MPV_LIBRARY ${MPV_LIBRARY_${l}})
+endforeach ()
+
+get_filename_component(_MPV_LIBRARY_DIR ${MPV_LIBRARY_mpv} PATH)
+mark_as_advanced(MPV_LIBRARY)
+
+set(MPV_LIBRARY_DIRS _MPV_LIBRARY_DIR)
+list(REMOVE_DUPLICATES MPV_LIBRARY_DIRS)
+
+mark_as_advanced(MPV_INCLUDE_DIR)
+mark_as_advanced(MPV_LIBRARY_DIRS)
+set(MPV_INCLUDE_DIRS ${MPV_INCLUDE_DIR})
+
+#
+### Check if everything was found and if the version is sufficient.
+#
+include(FindPackageHandleStandardArgs)
+find_package_handle_standard_args(MPV
+    FOUND_VAR MPV_FOUND
+    REQUIRED_VARS ${_MPV_REQUIRED_VARS}
+    VERSION_VAR MPV_VERSION
+)
+
+if (MPV_FOUND)
+    message(STATUS "Found libmpv: ${MPV_VERSION} ${MPV_INCLUDE_DIR} ${MPV_LIBRARY}")
+endif ()

@@ -1,0 +1,31 @@
+#include <winver.h>
+
+1 VERSIONINFO
+FILEVERSION ${VERSION_MAJOR}, ${VERSION_MINOR}, ${VERSION_ALTER}, ${VERSION_BUILD}
+FILEFLAGSMASK VS_FFI_FILEFLAGSMASK
+#ifdef _DEBUG
+FILEFLAGS VS_FF_DEBUG
+#else
+FILEFLAGS 0
+#endif
+FILEOS      VOS__WINDOWS32
+FILETYPE    VFT_APP
+FILESUBTYPE VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904B0"
+        BEGIN
+            VALUE "FileDescription", "${PROJECT_NAME} for Windows"
+            VALUE "LegalCopyright", "${PROJECT_AUTHOR} (C) Copyright 2026"
+            VALUE "OriginalFilename", "${PROJECT_NAME}.exe"
+            VALUE "ProductVersion", "${VERSION_MAJOR}.${VERSION_MINOR}.${VERSION_ALTER}.${VERSION_BUILD}"
+        END
+    END
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1200
+    END
+END
+
+IDI_ICON ICON "${CMAKE_SOURCE_DIR}/app/platform/win32/app.ico"

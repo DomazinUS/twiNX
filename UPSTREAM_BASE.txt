@@ -1,0 +1,10 @@
+Project foundation: Switchfin 0.9.1
+Upstream repository: https://github.com/dragonflylee/switchfin
+Upstream tag: 0.9.1
+Upstream license: Apache-2.0
+
+Vendored UI dependency: dragonflylee/borealis
+Commit: 7f03684805befffb1be18a1b2bdb81fa66945af2
+
+Vendored SVG dependency: sammycage/lunasvg
+Commit: f924651b85cac47dbe15f51a4aa320461fc1d07b

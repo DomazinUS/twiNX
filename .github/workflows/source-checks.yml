@@ -1,0 +1,45 @@
+name: Source checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-source-tree:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Validate public source tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f README.md
+          test -f CHANGELOG.md
+          test -f LICENSE
+          test -f THIRD_PARTY_NOTICES.md
+          test -f images/twiNX_banner.png
+          test -f app/src/activity/twinx_home.cpp
+
+          forbidden="$(find . -type f \
+            \( -name '*.nro' -o -name '*.elf' -o -name '*.nacp' -o -name '*.nso' \
+               -o -name '*.7z' -o -name '*.zip' \) -print)"
+          if [[ -n "$forbidden" ]]; then
+            echo "Generated or archived files must not be committed:"
+            echo "$forbidden"
+            exit 1
+          fi
+
+          test ! -d .twinx-backups
+          test ! -d .twinx-build
+          test ! -d build_switch
+          test ! -f twinx.txt
+          test ! -f twinx.example.txt
+          signing_files="$(find . -type f \
+            \( -name '*.jks' -o -name '*.keystore' -o -name '*.p12' -o -name '*.pfx' \) -print)"
+          test -z "$signing_files"
+          ! grep -R --line-number -E 'const std::string GA_KEY = ".+"' app

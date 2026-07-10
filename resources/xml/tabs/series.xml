@@ -1,0 +1,251 @@
+<brls:Box
+    width="auto"
+    height="auto">
+
+    <!-- centered: the scroll follows the D-pad focus (buttons -> seasons -> rows) -->
+    <brls:ScrollingFrame
+        grow="1.0"
+        scrollingBehavior="centered">
+
+        <brls:Box
+            axis="column"
+            paddingBottom="@style/main/content_padding_top_bottom">
+
+            <!-- full-bleed banner: backdrop + fade towards the background +
+                 logo nested at the bottom of the fade (readable in the shadow).
+                 NB: keep a cornerRadius on brls:Image with scalingType="fill",
+                 it is what enables the render clip (otherwise the image overflows). -->
+            <brls:Box
+                id="series/banner"
+                width="100%"
+                height="320">
+                <brls:Image
+                    id="series/image/backdrop"
+                    width="100%"
+                    height="100%"
+                    scalingType="fill"
+                    cornerRadius="4"
+                    backgroundColor="@theme/color/grey_1" />
+                <brls:Image
+                    id="series/banner/fade"
+                    positionType="absolute"
+                    positionBottom="0"
+                    positionLeft="0"
+                    width="100%"
+                    height="260"
+                    scalingType="stretch"
+                    image="@res/img/fade-bottom-dark.png" />
+                <brls:Box
+                    positionType="absolute"
+                    positionBottom="26"
+                    positionLeft="0"
+                    width="100%"
+                    justifyContent="center">
+                    <brls:Image
+                        id="series/image/logo"
+                        width="440"
+                        height="120"
+                        scalingType="fit" />
+                </brls:Box>
+            </brls:Box>
+
+            <!-- only the poster overlaps the banner; the info column
+                 (title, pills, genres, buttons, synopsis) starts BELOW the
+                 banner: no more text over the backdrop -->
+            <brls:Box
+                id="series/content/row"
+                marginTop="-150"
+                paddingLeft="@style/main/content_padding_sides"
+                paddingRight="@style/main/content_padding_sides">
+
+                <!-- 64: the poster only rises ~86 px into the banner
+                     (poster lowered, info column unchanged) -->
+                <brls:Box
+                    width="220"
+                    axis="column"
+                    marginTop="64"
+                    marginRight="34">
+                    <brls:Image
+                        id="series/image/poster"
+                        height="330"
+                        scalingType="fill"
+                        cornerRadius="10"
+                        backgroundColor="@theme/color/grey_1"
+                        image="@res/img/video-card-bg.png" />
+                </brls:Box>
+
+                <!-- 184 = 150 of banner overlap + ~34 px of air between the
+                     bottom of the banner and the top of the title -->
+                <brls:Box
+                    id="series/content/info"
+                    axis="column"
+                    marginTop="184"
+                    grow="1.0">
+
+                    <brls:Label
+                        id="series/label/title"
+                        fontSize="42"
+                        marginBottom="14" />
+
+                    <brls:Box
+                        alignItems="center"
+                        marginBottom="14">
+
+                        <brls:Box
+                            cornerRadius="14"
+                            height="28"
+                            alignItems="center"
+                            paddingLeft="12"
+                            paddingRight="12"
+                            marginRight="8"
+                            backgroundColor="@theme/color/pill">
+                            <brls:Label
+                                id="series/label/year"
+                                singleLine="true"
+                                fontSize="14" />
+                        </brls:Box>
+
+                        <brls:Box
+                            cornerRadius="14"
+                            height="28"
+                            alignItems="center"
+                            paddingLeft="12"
+                            paddingRight="12"
+                            marginRight="8"
+                            visibility="gone"
+                            backgroundColor="@theme/color/pill">
+                            <brls:Label
+                                id="series/parental/rating"
+                                singleLine="true"
+                                fontSize="14" />
+                        </brls:Box>
+
+                        <brls:Box
+                            cornerRadius="14"
+                            height="28"
+                            alignItems="center"
+                            paddingLeft="12"
+                            paddingRight="12"
+                            visibility="gone"
+                            backgroundColor="@theme/color/pill">
+                            <SVGImage
+                                width="14"
+                                height="14"
+                                marginRight="5"
+                                svg="@res/icon/ico-star.svg" />
+                            <brls:Label
+                                id="series/label/rating"
+                                singleLine="true"
+                                fontSize="14" />
+                        </brls:Box>
+                    </brls:Box>
+
+                    <brls:Label
+                        id="series/label/genres"
+                        fontSize="14"
+                        animated="false"
+                        textColor="@theme/font/grey"
+                        marginBottom="16" />
+
+                    <!-- inline buttons under the genres, before the synopsis:
+                         "Play" = next episode (OnDeck), "Download"
+                         = whole show (allLeaves). marginTop sets the action
+                         row apart from the title/meta block above. -->
+                    <brls:Box
+                        id="series/buttons"
+                        axis="row"
+                        marginTop="16"
+                        marginBottom="18">
+
+                        <IconButton
+                            id="series/play"
+                            icon="@res/icon/ico-play-dark.svg"
+                            text="@i18n/main/media/play"
+                            buttonStyle="primary" />
+
+                        <IconButton
+                            id="series/download"
+                            icon="@res/icon/ico-download-light.svg"
+                            text="@i18n/main/download/start"
+                            buttonStyle="bordered"
+                            marginLeft="12" />
+                    </brls:Box>
+
+                    <TextBox
+                        id="series/label/overview"
+                        fontSize="15"
+                        textColor="@theme/font/grey" />
+
+                </brls:Box>
+            </brls:Box>
+
+            <!-- full-width rows: insets inside the scroll (full-bleed),
+                 ~28 between the end of a row and the next Header.
+                 The "Seasons" row replaces the tabs. -->
+            <brls:Header
+                marginTop="28"
+                marginBottom="6"
+                marginLeft="@style/main/content_padding_sides"
+                marginRight="@style/main/content_padding_sides"
+                id="series/label/seasons"
+                title="@i18n/main/media/seasons" />
+
+            <HRecyclerFrame
+                height="@style/app/card/poster/row"
+                itemWidth="@style/app/card/poster/width"
+                itemSpace="18"
+                paddingLeft="@style/main/content_padding_sides"
+                paddingRight="@style/main/content_padding_sides"
+                id="series/seasons" />
+
+            <brls:Header
+                marginBottom="6"
+                marginLeft="@style/main/content_padding_sides"
+                marginRight="@style/main/content_padding_sides"
+                id="series/label/people"
+                title="@i18n/main/media/people" />
+
+            <HRecyclerFrame
+                height="250"
+                itemWidth="140"
+                itemSpace="18"
+                marginBottom="28"
+                paddingLeft="@style/main/content_padding_sides"
+                paddingRight="@style/main/content_padding_sides"
+                id="series/people" />
+
+            <brls:Header
+                marginBottom="6"
+                marginLeft="@style/main/content_padding_sides"
+                marginRight="@style/main/content_padding_sides"
+                id="series/label/special"
+                title="@i18n/main/media/special" />
+
+            <HRecyclerFrame
+                height="190"
+                itemWidth="250"
+                itemSpace="18"
+                paddingLeft="@style/main/content_padding_sides"
+                paddingRight="@style/main/content_padding_sides"
+                id="series/special" />
+
+            <brls:Header
+                marginBottom="6"
+                marginLeft="@style/main/content_padding_sides"
+                marginRight="@style/main/content_padding_sides"
+                id="series/label/similar"
+                title="@i18n/main/media/similar" />
+
+            <HRecyclerFrame
+                height="250"
+                itemWidth="140"
+                itemSpace="18"
+                marginBottom="28"
+                paddingLeft="@style/main/content_padding_sides"
+                paddingRight="@style/main/content_padding_sides"
+                id="series/similar" />
+
+        </brls:Box>
+
+    </brls:ScrollingFrame>
+</brls:Box>

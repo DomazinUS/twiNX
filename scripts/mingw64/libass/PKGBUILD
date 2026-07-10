@@ -1,0 +1,43 @@
+# Maintainer: Alexey Pavlov <alexpux@gmail.com>
+
+_realname=libass
+pkgbase=mingw-w64-${_realname}
+pkgname="${MINGW_PACKAGE_PREFIX}-${_realname}"
+pkgver=0.17.4
+pkgrel=1
+pkgdesc="A portable library for SSA/ASS subtitles rendering (mingw-w64)"
+arch=('any')
+mingw_arch=('mingw32' 'mingw64' 'clangarm64')
+url='https://github.com/libass/libass'
+license=('spdx:ISC')
+makedepends=(
+  "${MINGW_PACKAGE_PREFIX}-cc"
+  "${MINGW_PACKAGE_PREFIX}-meson"
+  "${MINGW_PACKAGE_PREFIX}-ninja"
+)
+depends=(
+  "${MINGW_PACKAGE_PREFIX}-fribidi"
+  "${MINGW_PACKAGE_PREFIX}-freetype"
+  "${MINGW_PACKAGE_PREFIX}-libunibreak"
+  "${MINGW_PACKAGE_PREFIX}-harfbuzz"
+)
+options=('staticlibs' '!strip')
+source=(https://github.com/libass/${_realname}/releases/download/${pkgver}/${_realname}-${pkgver}.tar.xz)
+sha256sums=('78f1179b838d025e9c26e8fef33f8092f65611444ffa1bfc0cfac6a33511a05a')
+
+build() {
+  MSYS2_ARG_CONV_EXCL="--prefix=" \
+    ${MINGW_PREFIX}/bin/meson setup \
+      --prefix="${MINGW_PREFIX}" \
+      --buildtype=release \
+      --default-library=static \
+      -Dasm=enabled \
+      "build-${MSYSTEM}" \
+      "${srcdir}/${_realname}-${pkgver}"
+
+  ${MINGW_PREFIX}/bin/meson compile -C "build-${MSYSTEM}"
+}
+
+package() {
+  ${MINGW_PREFIX}/bin/meson install -C "build-${MSYSTEM}" --destdir "${pkgdir}"
+}

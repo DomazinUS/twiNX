@@ -1,0 +1,53 @@
+# Maintainer:  Dave Murphy <davem@devkitpro.org>
+# Contributor: averne <averne381@gmail.com>
+# Contributor: Cpasjuste <cpasjuste@gmail.com>
+
+pkgbasename=libmpv
+pkgname=(
+  switch-${pkgbasename}
+  switch-${pkgbasename}-deko3d
+)
+provides=(switch-${pkgbasename})
+pkgver=0.36.0
+pkgrel=5
+pkgdesc='Command line video player (library only)'
+arch=('any')
+url='https://mpv.io/'
+license=('GPL')
+options=(!strip libtool staticlibs)
+source=(
+  "${pkgbasename}-${pkgver}.tar.gz::https://github.com/mpv-player/mpv/archive/v${pkgver}.tar.gz" 
+  "deko3d.patch"
+)
+sha256sums=('29abc44f8ebee013bb2f9fe14d80b30db19b534c679056e4851ceadf5a5e8bf6' 'SKIP')
+makedepends=("dkp-toolchain-vars" "dkp-meson-scripts")
+depends=('switch-ffmpeg' 'switch-mesa')
+groups=('switch-portlibs')
+
+prepare() {
+  cd mpv-$pkgver
+  patch -Np1 -i "$srcdir/deko3d.patch"
+}
+
+build() {
+  /opt/devkitpro/meson-cross.sh switch crossfile.txt build mpv-$pkgver \
+    -Dlibmpv=true -Dcplayer=false -Dtests=false -Dlua=disabled -Ddeko3d=disabled \
+    -Dplain-gl=enabled -Dsdl2=disabled -Dlibarchive=disabled -Dlibplacebo=disabled
+  meson compile -C build
+
+  /opt/devkitpro/meson-cross.sh switch crossfile-deko3d.txt build-deko3d mpv-$pkgver \
+    -Dlibmpv=true -Dcplayer=false -Dtests=false -Dlua=disabled -Ddeko3d=enabled \
+    -Dgl=disabled -Dsdl2=disabled -Dlibarchive=disabled -Dlibplacebo=disabled
+  meson compile -C build-deko3d
+}
+
+package_switch-libmpv() {
+  conflicts=(switch-${pkgbasename}-deko3d)
+  DESTDIR="$pkgdir" meson install -C build
+}
+
+package_switch-libmpv-deko3d() {
+  depends=('switch-ffmpeg' 'deko3d' 'libuam')
+  conflicts=(switch-${pkgbasename})
+  DESTDIR="$pkgdir" meson install -C build-deko3d
+}

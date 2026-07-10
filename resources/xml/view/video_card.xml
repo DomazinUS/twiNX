@@ -1,0 +1,91 @@
+<brls:Box
+    highlightCornerRadius="8"
+    axis="column"
+    width="auto"
+    height="auto">
+    <brls:Box
+        id="video/card/pic_box"
+        axis="row"
+        grow="1">
+        <brls:Image
+            id="video/card/picture"
+            backgroundColor="@theme/color/grey_1"
+            grow="1"
+            scalingType="fill"
+            image="@res/img/video-card-bg.png"
+            cornerRadius="4" />
+
+        <SVGImage
+            id="video/card/badge/top"
+            positionType="absolute"
+            positionTop="8"
+            positionRight="8"
+            height="24" />
+
+        <SVGImage
+            id="video/card/badge/favorite"
+            svg="@res/icon/ico-heart.svg"
+            visibility="invisible"
+            positionType="absolute"
+            positionBottom="8"
+            positionRight="8"
+            height="24" />
+
+        <brls:Box
+            positionBottom="0"
+            positionType="absolute"
+            background="vertical_linear"
+            paddingLeft="10"
+            paddingRight="10"
+            width="100%"
+            height="10%"
+            alignItems="center">
+            <brls:Image
+                id="video/card/badge/bottom/left"
+                scalingType="fit"
+                height="16" />
+            <brls:Label
+                id="video/card/label/rating"
+                positionType="absolute"
+                positionRight="0"
+                textColor="@theme/color/white"
+                fontSize="16" />
+        </brls:Box>
+
+        <brls:Box
+            wireframe="false"
+            positionType="absolute"
+            positionBottom="0"
+            visibility="gone"
+            width="100%"
+            height="2"
+            backgroundColor="#353535">
+            <brls:Rectangle
+                id="video/card/progress"
+                height="2"
+                width="50%"
+                color="@theme/color/app" />
+        </brls:Box>
+
+    </brls:Box>
+
+    <brls:Box
+        axis="column"
+        justifyContent="spaceEvenly"
+        alignItems="center">
+        <brls:Label
+            wireframe="false"
+            singleLine="true"
+            id="video/card/label/title"
+            height="25"
+            fontSize="18" />
+        <brls:Label
+            wireframe="false"
+            singleLine="true"
+            id="video/card/label/ext"
+            fontSize="12"
+            height="20"
+            textColor="@theme/font/grey" />
+    </brls:Box>
+
+</brls:Box>

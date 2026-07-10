@@ -1,0 +1,74 @@
+# Maintainer: Alexey Pavlov <alexpux@gmail.com>
+# Contributor: James Ross-Gowan <rossymiles@gmail.com>
+
+_realname=mpv
+pkgbase="mingw-w64-${_realname}"
+pkgname="${MINGW_PACKAGE_PREFIX}-${_realname}"
+pkgver=0.41.0
+pkgrel=1
+pkgdesc="Video player based on MPlayer/mplayer2 (mingw-w64)"
+url="https://mpv.io/"
+arch=('any')
+mingw_arch=('mingw32' 'mingw64' 'clangarm64')
+license=('spx:GPL-2.0-only' 'spx:LGPL-2.1-only')
+makedepends=(
+  "${MINGW_PACKAGE_PREFIX}-cc"
+  "${MINGW_PACKAGE_PREFIX}-meson"
+  "${MINGW_PACKAGE_PREFIX}-ninja"
+  "${MINGW_PACKAGE_PREFIX}-pkgconf"
+  "${MINGW_PACKAGE_PREFIX}-ffmpeg"
+  "${MINGW_PACKAGE_PREFIX}-libass"
+  "${MINGW_PACKAGE_PREFIX}-uchardet"
+  "${MINGW_PACKAGE_PREFIX}-shaderc"
+  "${MINGW_PACKAGE_PREFIX}-spirv-cross"
+  "${MINGW_PACKAGE_PREFIX}-libplacebo"
+  $([[ ${MINGW_PACKAGE_PREFIX} == *-i686* ]] || echo "${MINGW_PACKAGE_PREFIX}-angleproject")
+)
+options=('strip')
+source=(
+  "${_realname}-${pkgver}.tar.gz"::"https://github.com/mpv-player/${_realname}/archive/v${pkgver}.tar.gz"
+  "0001-d3d11-render.patch"
+)
+sha256sums=('ee21092a5ee427353392360929dc64645c54479aefdb5babc5cfbb5fad626209' 'SKIP')
+
+prepare() {
+  cd "${srcdir}/${_realname}-${pkgver}"
+  patch -Nbp1 -i "${srcdir}/0001-d3d11-render.patch"
+}
+
+build() {
+  if [[ ${MSYSTEM} == CLANG* ]]; then
+    LDFLAGS="-lc++ -static-libgcc -static"
+  else
+    LDFLAGS="-lstdc++ -static-libgcc -static-libstdc++ -static"
+  fi
+
+  MSYS2_ARG_CONV_EXCL="--prefix=" \
+    meson setup \
+      --prefix="${MINGW_PREFIX}" \
+      --buildtype=release \
+      --default-library=shared \
+      --prefer-static \
+      -Dlibmpv=true \
+      -Dcplayer=false \
+      -Dtests=false \
+      -Dd3d11=enabled \
+      -Dvulkan=disabled \
+      -Dlibarchive=disabled \
+      -Dlua=disabled \
+      "build-${MSYSTEM}" \
+      "${srcdir}/${_realname}-${pkgver}"
+  meson compile -C "build-${MSYSTEM}"
+}
+
+package() {
+  meson install -C "build-${MSYSTEM}" --destdir "${pkgdir}"
+  sed -s "/private/d" -i ${pkgdir}${MINGW_PREFIX}/lib/pkgconfig/mpv.pc
+  sed -s "s|$(cygpath -am ${MINGW_PREFIX})|${MINGW_PREFIX}|g" -i ${pkgdir}${MINGW_PREFIX}/lib/pkgconfig/mpv.pc
+  # used by avio
+  hfiles=("libavformat/avio.h" "libavformat/version_major.h" "libavutil/attributes.h"
+    "libavutil/avconfig.h" "libavutil/dict.h" "libavutil/log.h" "libavutil/macros.h" "libavutil/version.h")
+  for _name in "${hfiles[@]}"; do
+    install -Dm644 "${MINGW_PREFIX}/include/${_name}" "${pkgdir}${MINGW_PREFIX}/include/${_name}"
+  done
+}

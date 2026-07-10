@@ -1,0 +1,29 @@
+
+# Maintainer: Dave Murphy <davem@devkitpro.org>
+
+pkgname=libnx
+pkgver=4.12.0
+pkgrel=1
+pkgdesc="Nintendo Switch AArch64-only userland library."
+arch=('any')
+license=('custom')
+url="http://github.com/switchbrew"
+options=(!strip libtool staticlibs)
+source=("${pkgname}-${pkgver}.tar.gz::${url}/${pkgname}/archive/v${pkgver}.tar.gz")
+sha256sums=('1665209994d67b4b236d80fa200499853473a7e2bb502d5045d00fc0170f90ef')
+makedepends=('devkitA64')
+groups=('switch-dev')
+
+build() {
+
+  cd ${srcdir}/${pkgname}-${pkgver}/nx
+  make -j$(nproc)
+
+}
+
+package() {
+
+  cd ${srcdir}/${pkgname}-${pkgver}/nx
+  make DESTDIR=$pkgdir install
+
+}

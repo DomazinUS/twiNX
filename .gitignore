@@ -1,0 +1,50 @@
+# twiNX local development and build output
+/build*/
+/.twinx-build/
+/.twinx-backups/
+/.vscode/
+/.idea/
+/cmake-*/
+/.xmake/
+/switchfin/
+
+# Nintendo Switch build artifacts
+*.nro
+*.elf
+*.nacp
+*.nso
+*.nsp
+*.pkg.tar.*
+
+# Local runtime/authentication files
+*.jks
+*.keystore
+*.p12
+*.pfx
+*.pem
+/twinx.txt
+/twinx.example.txt
+/.env
+*.token
+
+# Generated dependency/build files
+.gdbinit
+*.exe
+*.dmp
+/resources/forwarder.nsp
+/resources/shaders/*.dksh
+/scripts/*/*/*.tar.*
+/scripts/aur/*.tar.*
+/scripts/*/*/src
+/jniLibs/
+
+# Upstream packaging output
+/debian/debhelper-build-stamp
+/debian/files
+/debian/switchfin*
+/debian/.debhelper/
+/.wget-hsts
+
+# OS metadata
+.DS_Store
+Thumbs.db

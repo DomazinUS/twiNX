@@ -1,0 +1,63 @@
+# Maintainer: Alexey Pavlov <alexpux@gmail.com>
+
+_realname=curl
+pkgbase=mingw-w64-${_realname}
+pkgname=${MINGW_PACKAGE_PREFIX}-${_realname}
+pkgver=8.16.0
+pkgrel=1
+pkgdesc="library for transferring data with URLs (mingw-w64)"
+arch=('any')
+mingw_arch=('mingw32' 'mingw64' 'clangarm64')
+url="https://curl.se/"
+license=("spdx:MIT")
+makedepends=(
+  "${MINGW_PACKAGE_PREFIX}-cc"
+  "${MINGW_PACKAGE_PREFIX}-cmake"
+  "${MINGW_PACKAGE_PREFIX}-ninja"
+)
+depends=(
+  "${MINGW_PACKAGE_PREFIX}-zlib"
+)
+source=("https://curl.haxx.se/download/${_realname}-${pkgver}.tar.xz" "static-libs.patch")
+sha256sums=('40c8cddbcb6cc6251c03dea423a472a6cea4037be654ba5cf5dec6eb2d22ff1d' 'SKIP')
+
+prepare() {
+  cd "${srcdir}/${_realname}-${pkgver}"
+  patch -Nbp1 -i "${srcdir}/static-libs.patch"
+}
+
+build() {
+  MSYS2_ARG_CONV_EXCL="-DCMAKE_INSTALL_PREFIX=" \
+    ${MINGW_PREFIX}/bin/cmake.exe -B "build-${MSYSTEM}" -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=${MINGW_PREFIX} \
+      -DCMAKE_DLL_NAME_WITH_SOVERSION=ON \
+      -DBUILD_CURL_EXE=OFF \
+      -DBUILD_SHARED_LIBS=ON \
+      -DBUILD_STATIC_LIBS=ON \
+      -DBUILD_TESTING=OFF \
+      -DBUILD_LIBCURL_DOCS=OFF \
+      -DBUILD_MISC_DOCS=OFF \
+      -DENABLE_CURL_MANUAL=OFF \
+      -DBUILD_EXAMPLES=OFF \
+      -DHTTP_ONLY=ON \
+      -DCURL_USE_SCHANNEL=ON \
+      -DCURL_DISABLE_PROGRESS_METER=ON \
+      -DUSE_NGHTTP2=OFF \
+      -DUSE_LIBIDN2=OFF \
+      -DUSE_WIN32_IDN=ON \
+      -DCURL_BROTLI=OFF \
+      -DCURL_ZSTD=OFF \
+      -DCURL_USE_LIBSSH2=OFF \
+      -DCURL_USE_LIBPSL=OFF \
+      "${srcdir}/${_realname}-${pkgver}"
+  ${MINGW_PREFIX}/bin/cmake.exe --build "build-${MSYSTEM}"
+}
+
+package() {
+  DESTDIR="${pkgdir}" ${MINGW_PREFIX}/bin/cmake.exe --install "build-${MSYSTEM}"
+
+  local PREFIX_DEPS=$(cygpath -am ${MINGW_PREFIX})
+  sed -s "s|${PREFIX_DEPS}|${MINGW_PREFIX}|g" -i ${pkgdir}${MINGW_PREFIX}/bin/curl-config
+  sed -s "s|${PREFIX_DEPS}|${MINGW_PREFIX}|g" -i ${pkgdir}${MINGW_PREFIX}/lib/pkgconfig/libcurl.pc
+}

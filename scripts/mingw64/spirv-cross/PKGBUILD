@@ -1,0 +1,56 @@
+# Maintainer: Biswapriyo Nath <nathbappai@gmail.com>
+
+_realname=spirv-cross
+pkgbase=mingw-w64-${_realname}
+pkgname="${MINGW_PACKAGE_PREFIX}-${_realname}"
+epoch=1
+pkgver=1.4.341.0
+pkgrel=1
+pkgdesc="A tool and library for parsing and converting SPIR-V to other shader languages (mingw-w64)"
+arch=('any')
+mingw_arch=('mingw32' 'mingw64' 'clangarm64')
+url='https://github.com/KhronosGroup/SPIRV-Cross/'
+license=('spdx:Apache-2.0')
+depends=(
+  "${MINGW_PACKAGE_PREFIX}-gcc-libs"
+  "${MINGW_PACKAGE_PREFIX}-glslang"
+  "${MINGW_PACKAGE_PREFIX}-spirv-tools"
+)
+makedepends=(
+  "${MINGW_PACKAGE_PREFIX}-cmake"
+  "${MINGW_PACKAGE_PREFIX}-ninja"
+  "${MINGW_PACKAGE_PREFIX}-python"
+  "${MINGW_PACKAGE_PREFIX}-cc"
+  "${MINGW_PACKAGE_PREFIX}-spirv-headers"
+)
+source=(
+  "https://github.com/KhronosGroup/SPIRV-Cross/archive/vulkan-sdk-${pkgver}/${_realname}-${pkgver}.tar.gz"
+  "0001-static-linking-hacks.patch"
+)
+sha256sums=('b2665ac9ddb65ff75a7ca2f6d410e73da443692742a1e3a5b7728ca6069a400c' 'SKIP')
+
+prepare() {
+  cd "${srcdir}/SPIRV-Cross-vulkan-sdk-${pkgver}"
+
+  patch -Nbp1 -i "${srcdir}/0001-static-linking-hacks.patch"
+  # Use system provided glslang and spirv-tools binaries.
+  sed -e "s|NO_DEFAULT_PATH||g" -i CMakeLists.txt
+}
+
+build() {
+  MSYS2_ARG_CONV_EXCL="-DCMAKE_INSTALL_PREFIX=" \
+    ${MINGW_PREFIX}/bin/cmake.exe -B "build-${MSYSTEM}" -G Ninja \
+      -DCMAKE_INSTALL_PREFIX=${MINGW_PREFIX} \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DBUILD_SHARED_LIBS=OFF \
+      -DSPIRV_CROSS_SHARED=ON \
+      -DSPIRV_CROSS_CLI=OFF \
+      -DSPIRV_CROSS_ENABLE_TESTS=OFF \
+      -DCMAKE_CXX_FLAGS='${CMAKE_CXX_FLAGS} -D__USE_MINGW_ANSI_STDIO' \
+      "${srcdir}/SPIRV-Cross-vulkan-sdk-${pkgver}"
+  ${MINGW_PREFIX}/bin/cmake.exe --build "build-${MSYSTEM}"
+}
+
+package() {
+  DESTDIR="${pkgdir}" ${MINGW_PREFIX}/bin/cmake.exe --install "build-${MSYSTEM}"
+}

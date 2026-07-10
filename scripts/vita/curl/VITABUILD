@@ -1,0 +1,40 @@
+pkgname=curl
+pkgver=8.16.0
+pkgrel=2
+url="https://curl.se/"
+source=("https://curl.haxx.se/download/curl-${pkgver}.tar.xz")
+sha256sums=('40c8cddbcb6cc6251c03dea423a472a6cea4037be654ba5cf5dec6eb2d22ff1d')
+depends=('mbedtls' 'zlib')
+
+build() {
+  cd curl-${pkgver}
+
+  cmake -B build -DCMAKE_TOOLCHAIN_FILE=$VITASDK/share/vita.toolchain.cmake \
+    -DCMAKE_INSTALL_PREFIX=$prefix \
+    -DCMAKE_BUILD_TYPE=Release \
+    -DBUILD_CURL_EXE=OFF \
+    -DBUILD_SHARED_LIBS=OFF \
+    -DBUILD_TESTING=OFF \
+    -DBUILD_EXAMPLES=OFF \
+    -DBUILD_LIBCURL_DOCS=OFF \
+    -DBUILD_MISC_DOCS=OFF \
+    -DENABLE_CURL_MANUAL=OFF \
+    -DHTTP_ONLY=ON \
+    -DCURL_USE_MBEDTLS=ON \
+    -DCURL_DISABLE_PROGRESS_METER=ON \
+    -DENABLE_IPV6=OFF \
+    -DENABLE_THREADED_RESOLVER=OFF \
+    -DUSE_NGHTTP2=OFF \
+    -DUSE_LIBIDN2=OFF \
+    -DCURL_BROTLI=OFF \
+    -DCURL_ZSTD=OFF \
+    -DCURL_USE_LIBSSH2=OFF \
+    -DCURL_USE_LIBPSL=OFF
+  sed -i '/HAVE_PIPE2/d' build/lib/curl_config.h
+  cmake --build build -j$(nproc)
+}
+
+package () {
+  cd curl-${pkgver}
+  DESTDIR=$pkgdir cmake --install build
+}

@@ -1,0 +1,291 @@
+{
+  "tabs": {
+    "home": "Home",
+    "genres": "Genres",
+    "program": "Programme",
+    "suggest": "Vorschläge",
+    "artists": "Interpreten",
+    "songs": "Lieder",
+    "search": "Suche",
+    "downloads": "Downloads",
+    "dashboard": "Übersicht",
+    "setting": "Einstellungen"
+  },
+  "home": {
+    "resume": "Weiterschauen",
+    "nextup": "Als Nächstes",
+    "latest": "Neustes Hinzugefügt"
+  },
+  "recommend": {
+    "like": "Weil du {} magst",
+    "watched": "Weil du {} angesehen hast",
+    "directed": "Unter der Regie von {}",
+    "starring": "In der Hauptrolle {}"
+  },
+  "about": {
+    "header": "Über",
+    "brief": "Yet another third-party jellyfin client",
+    "repo_header": "Repository"
+  },
+  "dashboard": {
+    "session": "Session",
+    "device": "Geräte",
+    "activity": "Aktivitäten",
+    "path": "Pfade",
+    "restart": "Neustarten",
+    "confirm_restart": "Willst du Jellyfin wirklich neu starten?",
+    "scan_all": "Alle Bibliotheken scannen",
+    "within_minute": "Innerhalb von 1 Minute",
+    "minute_ago": "vor {} Minuten",
+    "hour_ago": "vor {} Stunden"
+  },
+  "player": {
+    "subtitle": "Untertitel",
+    "none": "Nichts",
+    "audio": "Tonspur",
+    "common": "Vereint",
+    "speed": "Abspielgeschwindigkeit",
+    "quality": "Videoqualität",
+    "chapter": "Kapitel",
+    "auto": "Auto",
+    "toggle": "Wiedergabe/Pause",
+    "prev": "Vorheriges",
+    "next": "Nächstes",
+    "error": "Wiedergabefehler",
+    "episode": "Episoden",
+    "speed_up": "Aktuelle Geschwindigkeit {}"
+  },
+  "media": {
+    "sort": "Sortieren",
+    "sort_by": "Sortieren nach",
+    "filter": "Filter",
+    "order": "Reihenfolge",
+    "ascending": "Aufsteigend",
+    "descending": "Absteigend",
+    "name": "Name",
+    "seasons": "Staffeln",
+    "add_favorite": "Zu Favoriten hinzufügen",
+    "mark_played": "Als gesehen markieren",
+    "mark_unplayed": "Als ungesehen markieren",
+    "play": "Abspielen",
+    "intro": "Vorschau",
+    "people": "Mitwirkende",
+    "special": "Bonusmaterial",
+    "similar": "Ähnliche Titel",
+    "date_add": "Hinzugefügt am",
+    "date_played": "Zuletzt abgespielt",
+    "premiere_date": "Erscheinungsdatum",
+    "play_count": "Wiedergaben",
+    "rating": "Community-Bewertung",
+    "random": "Zufällig",
+    "played": "Gesehen",
+    "unplayed": "Ungesehen"
+  },
+  "search": {
+    "hint": "Support keywords and their initial letters",
+    "clear": "klären",
+    "delete": "löschen",
+    "paste": "Paste",
+    "history": "Geschichte",
+    "suggest": "Vorschläge",
+    "clear_history": "Suchverlauf wirklich leeren?",
+    "no_history": "Keine letzten Suchen",
+    "no_results": "Keine Ergebnisse",
+    "genres": {
+      "movie": "Filme",
+      "music": "Musik",
+      "series": "Serie",
+      "episode": "Folgen"
+    }
+  },
+  "remote": {
+    "local": "Dateien",
+    "folder": "Ordner",
+    "up": "Hoch",
+    "add": "Server hinzufügen",
+    "type": "Typ",
+    "name": "Name",
+    "host": "Host",
+    "port": "Port",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "path": "Startpfad",
+    "optional": "Optional",
+    "test_failed": "Verbindung fehlgeschlagen: {}",
+    "required": "Gib mindestens einen Namen und einen Host an."
+  },
+  "download": {
+    "start": "Herunterladen",
+    "cancel": "Download abbrechen",
+    "remove": "Download entfernen",
+    "downloading": "Wird heruntergeladen...",
+    "completed": "Heruntergeladen",
+    "failed": "Download fehlgeschlagen",
+    "queued": "In Warteschlange",
+    "items": "items",
+    "no_downloads": "Keine Downloads",
+    "confirm_remove": "Diesen Download entfernen?", 
+    "confirm_cancel": "Diesen Download abbrechen?",
+    "confirm_season": "{} Episoden herunterladen?",
+    "play_offline": "Offline abspielen",
+    "storage": "Speicher",
+    "storage_free": "{} frei von {}",
+    "section_active": "Aktiv",
+    "section_done": "Heruntergeladen",
+    "remove_all": "Alle entfernen",
+    "confirm_remove_all": "Alle Downloads entfernen?"
+  },
+  "setting": {
+    "quit_hint": "Diese Applikation wird beended und die Einstellung tritt bei dem nächsten Start in kraft.",
+    "name": "Name",
+    "version": "Version",
+    "os": "Betriebssystem",
+    "url": "URL",
+    "user": "Benutzer",
+    "username": "Benutzername",
+    "password": "Passwort",
+    "server": {
+      "header": "Server",
+      "detail": "Serverdetails",
+      "connect_new": "Neuer Server",
+      "connect_to": "Verbinde neuen Jellyfin-Server",
+      "invalid": "Die URL muss mit http:// oder https:// beginnen",
+      "connect": "Verbinden",
+      "delete": "Bist du sicher, dass du diesen Server löschen willst?",
+      "local": "Locale Server",
+      "users": "{} Benutzer",
+      "sigin_to": "In {} anmelden",
+      "signin": "Anmelden"
+    },
+    "playback": {
+      "header": "Wiedergabe",
+      "bottom_bar": "Zeige unteren Fortschrittsbalken",
+      "low_quality": "Dekodierung in geringer Qualität (weniger CPU-Last)",
+      "in_memory_cache": "Arbeitsspeicher-Cache",
+      "subs_fallback": "Untertitel automatisch laden",
+      "vo": "Videoausgabe",
+      "hwdec": "Hardwaredekodierung",
+      "force_directplay": "Direct Play erzwingen",
+      "osd_on_toggle": "OSD bei Pause anzeigen",
+      "touch_gesture": "Touch-Geste für Sprungschritt",
+      "clip_point": "Kapitelmarken anzeigen",
+      "transcodec": "Codec",
+      "audio_channels": "Audiokanäle",
+      "video_quality": "Videoqualität",
+      "subsync": "Untertitel-Synchronisierung"
+    },
+    "transcode": {
+      "header": "Transkodierung"
+    },
+    "control": {
+      "header": "Wiedergabesteuerung",
+      "tv_osd": "OSD-Steuerung im TV-Stil"
+    },
+    "filter": {
+      "mirror": "Video spiegeln",
+      "hflip": "Horizontal spiegeln",
+      "vflip": "Vertikal spiegeln",
+      "rotation": "Drehung"
+    },
+    "aspect": {
+      "header": "Seitenverhältnis",
+      "crop": "Zuschneiden",
+      "stretch": "Strecken",
+      "auto": "Auto"
+    },
+    "equalizer": {
+      "header": "Equalizer",
+      "brightness": "Helligkeit",
+      "contrast": "Kontrast",
+      "saturation": "Sättigung",
+      "gamma": "Gamma",
+      "hue": "Farbton",
+      "reset": "Zurücksetzen"
+    },
+    "network": {
+      "header": "Netzwerk",
+      "threads": "Anzahl an Bildladethreads",
+      "timeout": "Maximale Anfragedauer (ms)",
+      "proxy": "Proxy-Einstellung",
+      "host": "Host",
+      "port": "Port"
+    },
+    "ui": {
+      "header": "Oberfläche",
+      "scale": {
+        "header": "UI-Skalierung (Neustart erforderlich)",
+        "544p": "544p",
+        "720p": "720p",
+        "900p": "900p",
+        "1080p": "1080p"
+      },
+      "vsync": "Vertikale Synchronisierung",
+      "show_fps": "FPS anzeigen"
+    },
+    "tutorial": {
+      "header": "Anleitungen",
+      "open": "Desktop-Icon installieren",
+      "error": "Falls du einen Fehler findest",
+      "hot_key": "Tastenkürzel",
+      "font": "Eigene Schriftart festlegen",
+      "error_q1": "Netzwerk nicht erreichbar",
+      "error_a1": "1. Stelle sicher, dass atmosphere und die Systemfirmware auf dem neusten Stand sind\n2. Bestätige, dass die Systemzeit richtig eingestellt ist\n3. Stelle die Standard-Netzwerkeinstellungen wieder her, mitsamt IP, DNS usw.\n4.In China verwenden",
+      "error_q2": "Beendet sich mit zufälligem Fehler",
+      "error_a2": "1. Verwende eine Fat32-formatierte Speicherkarte\n2. Stelle sicher, dass atmosphere und die Systemfirmware auf dem neusten Stand sind\n3. Warte auf eine Behebung durch die Entwickler",
+      "font_q1": "Eigene Schriftart oder Tastensymbole festlegen",
+      "font_a1": "1. Lade die gewünschte Schriftart oder Symbolschrift herunter\n2. Benenne die Schriftart in: font.ttf; benenne die Symbole in: icon.ttf\n3. Lege die Schriftdateien in den Konfigurationsordner\n4. Starte die Applikation neu",
+      "font_q2": "FAQ",
+      "font_a2": "1. pleNx bevorzugt die Anzeige eigener Schriftarten und greift auf die eingebauten Schriftarten zurück\n2. \"Einstellungen - Anleitungen\" enthält einen Menüpunkt, um den Konfigurationsordner schnell zu öffnen\n3. Auf Linux verwendet pleNx xdg-open, um den Ordner zu öffnen. Falls sich der Konfigurationsordner nicht richtig öffnen lässt, kannst du erwägen, dieses Werkzeug zu installieren",
+      "font_q3": "Untertitel werden nicht angezeigt",
+      "font_a3": "Lege eine beliebige ttf-Datei unter {}/subfont.ttf ab"
+    },
+    "quick_connect": {
+      "header": "Schnellverbindung",
+      "code": "Code für die Schnellverbindung",
+      "invalid": "Ungültiger Code für die Schnellverbindung",
+      "success": "Autorisierung für Schnellverbindung erfolgreich. Bitte fahre auf dem anderen Gerät fort.",
+      "steps": "1. Öffne die Jellyfin App auf deinem Smartphone oder Web Browser und logge dich mit deinem Account ein\n2. Öffne das Benutzer-Menü und gehe zur Seite für die Schnellverbindung\n3. Gib folgenden Code ein:",
+      "disabled": "Hinweis: Schnellverbindung nicht aktiviert"
+    },
+    "others": {
+      "header": "Diverses",
+      "fullscreen": "Vollbild",
+      "always_on_top": "Immer im Vordergrund",
+      "single": "Einzelinstanz",
+      "overclock": "CPU-Übertacktung",
+      "debug": "Debug-Ansicht",
+      "sync": "Reihenfolge der Einstellungen beibehalten",
+      "theme": {
+        "header": "Aussehen (benötigt Neustart)",
+        "1": "Auto",
+        "2": "Hell",
+        "3": "Dunkel"
+      },
+      "language": {
+        "header": "Sprache (benötigt Neustart)",
+        "auto": "Auto"
+      },
+      "keymap": {
+        "header": "Knopfstil",
+        "xbox": "Xbox",
+        "ps": "PlayStation",
+        "keyboard": "Tastatur"
+      },
+      "config_dir": "Konfigurationsordner",
+      "logout": "Vom aktuellen Konto abmelden \n(die Applikation wird beendet)",
+      "up2date": "Switchfin ist auf dem neusten Stand",
+      "upgrade": "{} is verfügbar! Jetzt aktualisieren?",
+      "updating": "Aktualisierung läuft, jetzt abbrechen?",
+      "release": "Suche nach Aktualisierungen"
+    }
+  },
+  "hints": {
+    "hint1": "Selektiere ein Spiel vom Homescreen",
+    "hint2": "Halte die \uE0E5-Taste drücke die \uE0E0-Taste um hbmenu zu öffnen",
+    "hint3": "Wähle Switchfin in hbmenu",
+    "hint4": "Optional: Verwende den bereitgestellten Switchfin NSP forwarder",
+    "hint_nsp": "Drücke \uE0E0 um den NSP forwarder zu installieren",
+    "hint_confirm": "NSP forwarder zu installieren kann zu einem Ban von Nintendo führen\nBitte erneut bestätigen",
+    "hint_right": "Die Bilder sind vom Internet und gehören Nintendo Co., Ltd"
+  }
+}

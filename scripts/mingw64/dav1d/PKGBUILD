@@ -1,0 +1,42 @@
+# Maintainer: Christopher Degawa <ccom@randomderp.com>
+
+_realname=dav1d
+pkgbase=mingw-w64-${_realname}
+pkgname=("${MINGW_PACKAGE_PREFIX}-${_realname}")
+pkgver=1.5.3
+pkgrel=1
+pkgdesc="AV1 cross-platform decoder focused on speed and correctness (mingw-w64)"
+arch=('any')
+mingw_arch=('mingw32' 'mingw64' 'clangarm64')
+url='https://code.videolan.org/videolan/dav1d'
+license=('spdx:BSD-2-Clause')
+makedepends=(
+  "${MINGW_PACKAGE_PREFIX}-pkgconf"
+  "${MINGW_PACKAGE_PREFIX}-cc"
+  "${MINGW_PACKAGE_PREFIX}-meson"
+  "${MINGW_PACKAGE_PREFIX}-ninja"
+  "${MINGW_PACKAGE_PREFIX}-xxhash"
+  $([[ ${MINGW_PACKAGE_PREFIX} == *-clang-aarch64* ]] || echo "${MINGW_PACKAGE_PREFIX}-nasm")
+)
+source=("https://downloads.videolan.org/pub/videolan/dav1d/${pkgver}/dav1d-${pkgver}.tar.xz")
+sha256sums=('732010aa5ef461fa93355ed2c6c5fedb48ddc4b74e697eaabe8907eaeb943011')
+
+build() {
+  MSYS2_ARG_CONV_EXCL="--prefix=" \
+    ${MINGW_PREFIX}/bin/meson setup \
+      --prefix=${MINGW_PREFIX} \
+      --default-library=static \
+      --buildtype=release \
+      -Denable_tests=false \
+      -Denable_docs=false \
+      -Denable_tools=false \
+      -Denable_examples=false \
+      "build-${MSYSTEM}" \
+      "${srcdir}/${_realname}-${pkgver}"
+
+  ${MINGW_PREFIX}/bin/meson compile -C "build-${MSYSTEM}"
+}
+
+package() {
+  ${MINGW_PREFIX}/bin/meson install -C "build-${MSYSTEM}" --destdir "${pkgdir}"
+}
