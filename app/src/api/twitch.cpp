@@ -22,7 +22,7 @@ namespace fs = std::filesystem;
 
 std::string settingsPath() {
 #if defined(__SWITCH__)
-    return "sdmc:/config/TwiNX/settings.json";
+    return "sdmc:/config/TwiNXPortraitExperimental/settings.json";
 #else
     return "settings.json";
 #endif
@@ -313,7 +313,7 @@ Config loadConfig() {
     const std::vector<std::string> candidates = {
 #if defined(__SWITCH__)
         "sdmc:/switch/twinx.txt",
-        "sdmc:/config/TwiNX/twinx.txt",
+        "sdmc:/config/TwiNXPortraitExperimental/twinx.txt",
 #endif
         "twinx.txt",
     };

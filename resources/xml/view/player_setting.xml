@@ -46,6 +46,8 @@
                     <brls:SelectorCell
                         id="setting/twitch/decoder" />
                     <brls:SelectorCell
+                        id="setting/portrait/orientation" />
+                    <brls:SelectorCell
                         id="setting/twitch/chat_mode" />
                     <brls:SelectorCell
                         id="setting/twitch/chat_participation" />

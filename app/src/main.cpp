@@ -4,6 +4,7 @@
 #include "utils/download.hpp"
 #include "utils/thread.hpp"
 #include "utils/debug_log.hpp"
+#include "utils/orientation.hpp"
 #include "api/analytics.hpp"
 
 #include "view/svg_image.hpp"
@@ -93,6 +94,7 @@ int main(int argc, char* argv[]) {
     }
 
     conf.initThemes();
+    twinx::portrait::OrientationController::instance().init();
     DownloadManager::instance().init();
 
     // Return directly to the desktop when closing the application (only for NX)
@@ -135,6 +137,7 @@ int main(int argc, char* argv[]) {
 // Run the app
     while (brls::Application::mainLoop());
 
+    twinx::portrait::OrientationController::instance().shutdown();
     ThreadPool::instance().stop();
 
     conf.checkRestart(argv);

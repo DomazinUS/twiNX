@@ -38,6 +38,7 @@ private:
     BRLS_BIND(brls::SelectorCell, audioTrack, "setting/track/audio");
     BRLS_BIND(brls::SelectorCell, btnTwitchQuality, "setting/twitch/quality");
     BRLS_BIND(brls::SelectorCell, btnTwitchDecoder, "setting/twitch/decoder");
+    BRLS_BIND(brls::SelectorCell, btnPortraitOrientation, "setting/portrait/orientation");
     BRLS_BIND(brls::SelectorCell, btnTwitchChatMode, "setting/twitch/chat_mode");
     BRLS_BIND(brls::SelectorCell, btnTwitchChatParticipation, "setting/twitch/chat_participation");
     BRLS_BIND(brls::SelectorCell, btnTwitchChatComposer, "setting/twitch/chat_composer");

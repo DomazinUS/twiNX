@@ -28,7 +28,7 @@ struct RawResponse {
 
 std::string oauthPath() {
 #if defined(__SWITCH__)
-    return "sdmc:/config/TwiNX/oauth.json";
+    return "sdmc:/config/TwiNXPortraitExperimental/oauth.json";
 #else
     return "oauth.json";
 #endif

@@ -36,7 +36,7 @@ constexpr size_t MAX_DEDUP_IDS = 128;
 
 std::string settingsPath() {
 #if defined(__SWITCH__)
-    return "sdmc:/config/TwiNX/settings.json";
+    return "sdmc:/config/TwiNXPortraitExperimental/settings.json";
 #else
     return "settings.json";
 #endif

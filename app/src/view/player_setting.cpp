@@ -2,6 +2,7 @@
 #include "api/twitch_chat.hpp"
 #include "utils/config.hpp"
 #include "utils/event.hpp"
+#include "utils/orientation.hpp"
 #include "view/button_close.hpp"
 #include "view/mpv_core.hpp"
 #include "view/player_setting.hpp"
@@ -41,6 +42,16 @@ const std::vector<std::string>& twitchDecoderLabels() {
         "Software (stable)",
         "Hardware (experimental)",
         "Hybrid (experimental)",
+    };
+    return labels;
+}
+
+const std::vector<std::string>& portraitOrientationLabels() {
+    static const std::vector<std::string> labels = {
+        "Auto (Joy-Con sensor)",
+        "Landscape",
+        "Portrait clockwise",
+        "Portrait counter-clockwise",
     };
     return labels;
 }
@@ -166,6 +177,7 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
     if (twitchChannel.empty()) {
         btnTwitchQuality->setVisibility(brls::Visibility::GONE);
         btnTwitchDecoder->setVisibility(brls::Visibility::GONE);
+        btnPortraitOrientation->setVisibility(brls::Visibility::GONE);
         btnTwitchChatMode->setVisibility(brls::Visibility::GONE);
         btnTwitchChatParticipation->setVisibility(brls::Visibility::GONE);
         btnTwitchChatComposer->setVisibility(brls::Visibility::GONE);
@@ -207,6 +219,28 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
                     [](const std::string& error) {
                         brls::Application::notify("twiNX quality error: " + error);
                     });
+            });
+
+        auto& orientationController =
+            twinx::portrait::OrientationController::instance();
+        btnPortraitOrientation->init(
+            "Display orientation (experimental)",
+            portraitOrientationLabels(),
+            static_cast<int>(orientationController.mode()),
+            [](int selected) {
+                const int bounded = std::clamp(selected, 0, 3);
+                auto& controller =
+                    twinx::portrait::OrientationController::instance();
+                if (!controller.setMode(
+                        static_cast<twinx::portrait::OrientationMode>(bounded))) {
+                    brls::Application::notify(
+                        "Portrait Lab: could not save orientation preference");
+                    return;
+                }
+                if (bounded == 0) {
+                    brls::Application::notify(
+                        "Portrait Lab: automatic Joy-Con orientation enabled");
+                }
             });
 
         const twitch::DecoderMode decoderMode =

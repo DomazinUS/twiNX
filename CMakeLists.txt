@@ -71,14 +71,14 @@ message(STATUS "git commit ${GIT_TAG_SHORT} build ${VERSION_BUILD}")
 include(${BOREALIS_LIBRARY}/cmake/toolchain.cmake)
 
 # project info
-project(TwiNX)
+project(TwiNXPortraitExperimental)
 set(VERSION_MAJOR "0")
 set(VERSION_MINOR "8")
 set(VERSION_ALTER "1")
-set(PROJECT_TITLEID "010ff000ffff0005")
+set(PROJECT_TITLEID "010ff000ffff0006")
 set(PROJECT_AUTHOR "HiroshiYamauchi")
-set(PROJECT_DISPLAY_NAME "twiNX")
-set(PACKAGE_NAME "app.twinx")
+set(PROJECT_DISPLAY_NAME "twiNX Portrait Lab")
+set(PACKAGE_NAME "app.twinx.portrait.experimental")
 set(VITA_TITLEID "TWINX0000")
 set(PSN_TITLE_ID "TWNX00000")
 set(VITA_VERSION "00.91")
@@ -263,6 +263,7 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
     APP_BUILD=${VERSION_BUILD}
     BUILD_TAG_SHORT=${GIT_TAG_SHORT}
     BUILD_PACKAGE_NAME=${PROJECT_NAME}
+    TWINX_PORTRAIT_EXPERIMENT=1
 )
 
 # building release file
