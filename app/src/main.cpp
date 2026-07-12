@@ -94,13 +94,16 @@ int main(int argc, char* argv[]) {
     }
 
     conf.initThemes();
-    twinx::portrait::OrientationController::instance().init();
     DownloadManager::instance().init();
 
     // Return directly to the desktop when closing the application (only for NX)
     brls::Application::getPlatform()->exitToHomeMode(true);
 
     brls::Application::createWindow(fmt::format("{} for {}", AppVersion::getPackageName(), AppVersion::getPlatform()));
+
+    // SwitchPlatform creates its InputManager inside createWindow(). Sensor
+    // subscriptions are invalid before this point.
+    twinx::portrait::OrientationController::instance().init();
 
     // Have the application register an action on every activity that will quit when you press BUTTON_START
     brls::Application::setGlobalQuit(false);
