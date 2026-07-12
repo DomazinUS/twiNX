@@ -49,7 +49,7 @@ private:
     DisplayOrientation currentOrientation = DisplayOrientation::Landscape;
     DisplayOrientation candidateOrientation = DisplayOrientation::Landscape;
     float filteredX = 0.0f;
-    float filteredY = 0.0f;
+    float filteredScreenY = 0.0f;
     bool filterReady = false;
     bool initialized = false;
     std::chrono::steady_clock::time_point candidateSince{};

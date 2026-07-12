@@ -2,12 +2,14 @@
 #include "api/twitch_chat.hpp"
 #include "utils/config.hpp"
 #include "utils/event.hpp"
+#include "utils/haptics.hpp"
 #include "utils/orientation.hpp"
 #include "view/button_close.hpp"
 #include "view/mpv_core.hpp"
 #include "view/player_setting.hpp"
 
 #include <algorithm>
+#include <cmath>
 #include <cstdlib>
 #include <vector>
 
@@ -52,6 +54,13 @@ const std::vector<std::string>& portraitOrientationLabels() {
         "Landscape",
         "Portrait clockwise",
         "Portrait counter-clockwise",
+    };
+    return labels;
+}
+
+const std::vector<std::string>& keyboardHapticLabels() {
+    static const std::vector<std::string> labels = {
+        "Off", "Light", "Medium", "Strong", "Maximum",
     };
     return labels;
 }
@@ -178,6 +187,7 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
         btnTwitchQuality->setVisibility(brls::Visibility::GONE);
         btnTwitchDecoder->setVisibility(brls::Visibility::GONE);
         btnPortraitOrientation->setVisibility(brls::Visibility::GONE);
+        btnKeyboardHaptic->setVisibility(brls::Visibility::GONE);
         btnTwitchChatMode->setVisibility(brls::Visibility::GONE);
         btnTwitchChatParticipation->setVisibility(brls::Visibility::GONE);
         btnTwitchChatComposer->setVisibility(brls::Visibility::GONE);
@@ -241,6 +251,23 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
                     brls::Application::notify(
                         "Portrait Lab: automatic Joy-Con orientation enabled");
                 }
+            });
+
+        btnKeyboardHaptic->init(
+            "Touch keyboard vibration intensity",
+            keyboardHapticLabels(),
+            std::clamp(
+                static_cast<int>(std::lround(
+                    twinx::haptics::keyboardIntensity() * 4.0f)),
+                0,
+                4),
+            [](int selected) {
+                const float intensity =
+                    static_cast<float>(std::clamp(selected, 0, 4)) / 4.0f;
+                if (!twinx::haptics::setKeyboardIntensity(intensity))
+                    brls::Application::notify(
+                        "Portrait Lab: could not save vibration preference");
+                twinx::haptics::keyboardPulse();
             });
 
         const twitch::DecoderMode decoderMode =

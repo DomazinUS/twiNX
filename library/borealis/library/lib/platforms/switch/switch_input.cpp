@@ -264,6 +264,26 @@ void SwitchInputManager::updateControllerStateInner(ControllerState* state, PadS
         state->axes[RIGHT_Y] = 0;
     }
 
+    if (Application::getContentOrientation() != ContentOrientation::LANDSCAPE)
+    {
+        // The left controls sit underneath the portrait grip and are easy to
+        // press accidentally. Keep the D-pad available for portrait commands,
+        // but suppress the stick, stick click, ZL, L and Minus.
+        state->axes[LEFT_X] = 0;
+        state->axes[LEFT_Y] = 0;
+        state->buttons[BUTTON_LT] = false;
+        state->buttons[BUTTON_LB] = false;
+        state->buttons[BUTTON_LSB] = false;
+        state->buttons[BUTTON_BACK] = false;
+        state->buttons[BUTTON_UP] = false;
+        state->buttons[BUTTON_DOWN] = false;
+
+        state->buttons[BUTTON_NAV_UP] = false;
+        state->buttons[BUTTON_NAV_RIGHT] = keysDown & HidNpadButton_Right;
+        state->buttons[BUTTON_NAV_DOWN] = false;
+        state->buttons[BUTTON_NAV_LEFT] = keysDown & HidNpadButton_Left;
+    }
+
     state->axes[LEFT_Z]  = 0; // SWITCH NOT SUPPORT ZL AXIS
     state->axes[RIGHT_Z] = 0; // SWITCH NOT SUPPORT ZR AXIS
 }
@@ -355,6 +375,31 @@ void SwitchInputManager::sendRumbleRaw(float lowFreq, float highFreq, float lowA
     {
         sendRumbleInternal(m_vibration_device_handles[0], m_vibration_values[0], lowFreq, highFreq, lowAmp, highAmp);
     }
+}
+
+void SwitchInputManager::sendRumbleRawForDevice(
+    unsigned int device,
+    float lowFreq,
+    float highFreq,
+    float lowAmp,
+    float highAmp)
+{
+    if (device >= 2)
+        return;
+
+    padUpdate(&this->padStateHandheld);
+    HidVibrationDeviceHandle* handles = padStateHandheld.active_handheld
+        ? m_vibration_device_handheld
+        : m_vibration_device_handles[0];
+    HidVibrationValue* values = padStateHandheld.active_handheld
+        ? m_vibration_values_handheld
+        : m_vibration_values[0];
+
+    values[device].amp_low = lowAmp;
+    values[device].freq_low = lowFreq;
+    values[device].amp_high = highAmp;
+    values[device].freq_high = highFreq;
+    hidSendVibrationValues(&handles[device], &values[device], 1);
 }
 
 void SwitchInputManager::sendRumble(unsigned short controller, unsigned short lowFreqMotor, unsigned short highFreqMotor)

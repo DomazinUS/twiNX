@@ -55,6 +55,12 @@ class SwitchInputManager : public InputManager
     void drawCursor(NVGcontext* vg) override;
 
     void sendRumbleRaw(float lowFreq, float highFreq, float lowAmp, float highAmp);
+    void sendRumbleRawForDevice(
+        unsigned int device,
+        float lowFreq,
+        float highFreq,
+        float lowAmp,
+        float highAmp);
 
     void clearVibration(int controller);
 

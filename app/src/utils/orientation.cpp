@@ -10,11 +10,11 @@
 namespace twinx::portrait {
 namespace {
 
-constexpr float FILTER_ALPHA = 0.16f;
-constexpr float PORTRAIT_THRESHOLD = 0.72f;
-constexpr float LANDSCAPE_THRESHOLD = 0.62f;
-constexpr float AXIS_MARGIN = 0.16f;
-constexpr auto ORIENTATION_HOLD = std::chrono::milliseconds(650);
+constexpr float FILTER_ALPHA = 0.18f;
+constexpr float ENTER_AXIS_MINIMUM = 0.48f;
+constexpr float ENTER_DOMINANCE = 1.12f;
+constexpr float EXIT_DOMINANCE = 1.06f;
+constexpr auto ORIENTATION_HOLD = std::chrono::milliseconds(520);
 
 }  // namespace
 
@@ -89,28 +89,43 @@ void OrientationController::handleSensor(brls::SensorEvent event) {
         return;
 
     const float x = event.data[0];
-    const float y = event.data[1];
-    const float magnitude = std::sqrt(x * x + y * y + event.data[2] * event.data[2]);
+    // Borealis exposes the Joy-Con's depth axis as data[1]. Using it as the
+    // landscape axis made orientation depend on how far the screen was tilted
+    // toward the viewer. data[2] follows the Switch screen's vertical edge.
+    const float screenY = event.data[2];
+    const float depth = event.data[1];
+    const float magnitude =
+        std::sqrt(x * x + screenY * screenY + depth * depth);
     if (!std::isfinite(magnitude) || magnitude < 0.55f) return;
 
     if (!filterReady) {
         filteredX = x;
-        filteredY = y;
+        filteredScreenY = screenY;
         filterReady = true;
     } else {
         filteredX += FILTER_ALPHA * (x - filteredX);
-        filteredY += FILTER_ALPHA * (y - filteredY);
+        filteredScreenY +=
+            FILTER_ALPHA * (screenY - filteredScreenY);
     }
 
     const float absX = std::abs(filteredX);
-    const float absY = std::abs(filteredY);
+    const float absScreenY = std::abs(filteredScreenY);
     DisplayOrientation detected = currentOrientation;
 
-    if (absX >= PORTRAIT_THRESHOLD && absX >= absY + AXIS_MARGIN) {
+    const bool currentlyPortrait =
+        currentOrientation != DisplayOrientation::Landscape;
+    const float portraitDominance =
+        currentlyPortrait ? EXIT_DOMINANCE : ENTER_DOMINANCE;
+    const float landscapeDominance =
+        currentlyPortrait ? ENTER_DOMINANCE : EXIT_DOMINANCE;
+
+    if (absX >= ENTER_AXIS_MINIMUM &&
+        absX >= absScreenY * portraitDominance) {
         detected = filteredX > 0.0f
             ? DisplayOrientation::PortraitClockwise
             : DisplayOrientation::PortraitCounterClockwise;
-    } else if (absY >= LANDSCAPE_THRESHOLD && absY >= absX + AXIS_MARGIN) {
+    } else if (absScreenY >= ENTER_AXIS_MINIMUM &&
+        absScreenY >= absX * landscapeDominance) {
         detected = DisplayOrientation::Landscape;
     } else {
         candidateOrientation = currentOrientation;
@@ -136,6 +151,7 @@ void OrientationController::handleSensor(brls::SensorEvent event) {
 void OrientationController::applyOrientation(
     DisplayOrientation orientation,
     bool notify) {
+    (void)notify;
     if (orientation == currentOrientation) return;
     currentOrientation = orientation;
     candidateOrientation = orientation;
@@ -143,11 +159,6 @@ void OrientationController::applyOrientation(
     brls::Logger::info(
         "Portrait Lab orientation changed: {}",
         orientationName(orientation));
-    if (notify) {
-        brls::Application::notify(
-            std::string("Portrait Lab: ") + orientationName(orientation) +
-            " detected");
-    }
 }
 
 const char* OrientationController::orientationName(

@@ -17,6 +17,7 @@
 #include "utils/misc.hpp"
 #include "utils/config.hpp"
 #include "utils/image.hpp"
+#include "utils/haptics.hpp"
 #include "utils/orientation.hpp"
 
 #include <utility>
@@ -27,6 +28,7 @@
 #include <optional>
 #include <sstream>
 #include <chrono>
+#include <cctype>
 #include <cmath>
 #include <thread>
 #include <unordered_map>
@@ -784,12 +786,223 @@ private:
 };
 
 
+class PortraitDraftPreview : public brls::View {
+public:
+    void configure(
+        const std::string& value,
+        const std::vector<twitch::UserEmote>& emotes) {
+        draft = value;
+        segments.clear();
+
+        std::unordered_map<std::string, const twitch::UserEmote*> byName;
+        byName.reserve(emotes.size());
+        for (const auto& emote : emotes) {
+            if (!emote.name.empty()) byName.emplace(emote.name, &emote);
+        }
+
+        size_t position = 0;
+        while (position < draft.size()) {
+            const bool whitespace = std::isspace(
+                static_cast<unsigned char>(draft[position]));
+            size_t end = position + 1;
+            while (end < draft.size() &&
+                static_cast<bool>(std::isspace(
+                    static_cast<unsigned char>(draft[end]))) == whitespace)
+                ++end;
+
+            Segment segment;
+            segment.text = draft.substr(position, end - position);
+            if (!whitespace) {
+                const auto found = byName.find(segment.text);
+                if (found != byName.end()) {
+                    segment.emote = true;
+                    segment.image = TwitchEmoteTexturePool::instance().get(
+                        found->second->imageUrl);
+                }
+            }
+            segments.push_back(std::move(segment));
+            position = end;
+        }
+        this->invalidate();
+    }
+
+    void draw(
+        NVGcontext* vg,
+        float x,
+        float y,
+        float width,
+        float height,
+        brls::Style,
+        brls::FrameContext*) override {
+        nvgSave(vg);
+        nvgIntersectScissor(vg, x, y, width, height);
+
+        constexpr float FONT_SIZE = 20.0f;
+        constexpr float LINE_HEIGHT = 29.0f;
+        constexpr float EMOTE_SIZE = 27.0f;
+        constexpr int MAX_LINES = 2;
+
+        nvgFontFaceId(vg, brls::Application::getDefaultFont());
+        nvgFontSize(vg, FONT_SIZE);
+        nvgTextAlign(vg, NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+
+        if (draft.empty()) {
+            nvgFillColor(vg, nvgRGB(150, 158, 176));
+            nvgText(vg, x, y + FONT_SIZE, "Type a message...", nullptr);
+            nvgRestore(vg);
+            return;
+        }
+
+        auto textWidth = [&](const std::string& text) {
+            float bounds[4]{};
+            return nvgTextBounds(
+                vg, 0, 0, text.c_str(), nullptr, bounds);
+        };
+
+        float cursorX = x;
+        float cursorY = y + FONT_SIZE;
+        int line = 0;
+        const float right = x + width;
+        auto nextLine = [&]() {
+            cursorX = x;
+            cursorY += LINE_HEIGHT;
+            ++line;
+        };
+
+        for (const auto& segment : segments) {
+            if (line >= MAX_LINES) break;
+            const float segmentWidth = segment.emote
+                ? EMOTE_SIZE + 4.0f
+                : textWidth(segment.text);
+            if (cursorX > x && cursorX + segmentWidth > right) nextLine();
+            if (line >= MAX_LINES) break;
+
+            if (segment.emote && segment.image &&
+                segment.image->getTexture() > 0) {
+                const float imageY = cursorY - FONT_SIZE - 5.0f;
+                const NVGpaint paint = nvgImagePattern(
+                    vg,
+                    cursorX,
+                    imageY,
+                    EMOTE_SIZE,
+                    EMOTE_SIZE,
+                    0,
+                    segment.image->getTexture(),
+                    1.0f);
+                nvgBeginPath(vg);
+                nvgRect(vg, cursorX, imageY, EMOTE_SIZE, EMOTE_SIZE);
+                nvgFillPaint(vg, paint);
+                nvgFill(vg);
+                cursorX += EMOTE_SIZE + 4.0f;
+            } else {
+                nvgFillColor(vg, nvgRGB(244, 246, 250));
+                nvgText(
+                    vg,
+                    cursorX,
+                    cursorY,
+                    segment.text.c_str(),
+                    nullptr);
+                cursorX += textWidth(segment.text);
+            }
+        }
+        nvgRestore(vg);
+    }
+
+private:
+    struct Segment {
+        std::string text;
+        bool emote = false;
+        brls::Image* image = nullptr;
+    };
+
+    std::string draft;
+    std::vector<Segment> segments;
+};
+
+class PortraitEmoteCell : public RecyclingGridItem {
+public:
+    PortraitEmoteCell() {
+        this->setAxis(brls::Axis::COLUMN);
+        this->setFocusable(true);
+        this->setAlignItems(brls::AlignItems::CENTER);
+        this->setJustifyContent(brls::JustifyContent::CENTER);
+        this->setPadding(5, 5, 5, 5);
+        this->setCornerRadius(6.0f);
+        this->setBackgroundColor(nvgRGB(31, 35, 46));
+
+        picture = new brls::Image();
+        picture->setWidth(44.0f);
+        picture->setHeight(44.0f);
+        picture->setImageFromRes("img/video-card-bg.png");
+        this->addView(picture);
+
+        name = new brls::Label();
+        name->setFontSize(11.0f);
+        name->setSingleLine(true);
+        name->setHorizontalAlign(brls::HorizontalAlign::CENTER);
+        name->setTextColor(nvgRGB(229, 231, 238));
+        name->setMarginTop(3.0f);
+        name->setWidthPercentage(100.0f);
+        this->addView(name);
+    }
+
+    ~PortraitEmoteCell() override { Image::cancel(picture); }
+
+    void prepareForReuse() override {
+        Image::cancel(picture);
+        picture->setImageFromRes("img/video-card-bg.png");
+        name->setText("");
+    }
+
+    void cacheForReuse() override { Image::cancel(picture); }
+
+    void configure(const twitch::UserEmote& emote) {
+        name->setText(emote.name);
+        if (!emote.imageUrl.empty()) Image::with(picture, emote.imageUrl);
+    }
+
+private:
+    brls::Image* picture = nullptr;
+    brls::Label* name = nullptr;
+};
+
+class PortraitEmoteDataSource : public RecyclingGridDataSource {
+public:
+    PortraitEmoteDataSource(
+        std::vector<twitch::UserEmote> emotes,
+        std::function<void(const twitch::UserEmote&)> selected)
+        : emotes(std::move(emotes)), selected(std::move(selected)) {}
+
+    size_t getItemCount() override { return emotes.size(); }
+
+    RecyclingGridItem* cellForRow(
+        RecyclingView* recycler,
+        size_t index) override {
+        auto* cell = dynamic_cast<PortraitEmoteCell*>(
+            recycler->dequeueReusableCell("PortraitTwitchEmote"));
+        cell->configure(emotes.at(index));
+        return cell;
+    }
+
+    void onItemSelected(brls::Box*, size_t index) override {
+        if (selected) selected(emotes.at(index));
+    }
+
+    void clearData() override { emotes.clear(); }
+
+private:
+    std::vector<twitch::UserEmote> emotes;
+    std::function<void(const twitch::UserEmote&)> selected;
+};
+
 class PortraitChatComposer : public brls::Box {
 public:
     using SendCallback = std::function<bool(const std::string&)>;
 
-    explicit PortraitChatComposer(SendCallback sendRequested)
-        : sendRequested(std::move(sendRequested)) {
+    PortraitChatComposer(std::string channel, SendCallback sendRequested)
+        : channel(std::move(channel)),
+          sendRequested(std::move(sendRequested)),
+          emotes(twitch::loadRecentEmotes()) {
         this->setAxis(brls::Axis::COLUMN);
         this->setWidthPercentage(100.0f);
         this->setHeight(485.0f);
@@ -805,6 +1018,11 @@ public:
         draftBox->setMarginBottom(8.0f);
         draftBox->setCornerRadius(6.0f);
         draftBox->setBackgroundColor(nvgRGB(28, 33, 43));
+        draftBox->registerClickAction([this](brls::View*) {
+            setEmotePanelVisible(!emotePanelVisible);
+            return true;
+        });
+        draftBox->addGestureRecognizer(new brls::TapGestureRecognizer(draftBox));
         this->addView(draftBox);
 
         auto* draftHeader = new brls::Box();
@@ -828,17 +1046,19 @@ public:
         counter->setHorizontalAlign(brls::HorizontalAlign::RIGHT);
         draftHeader->addView(counter);
 
-        draftLabel = new brls::Label();
-        draftLabel->setText("Type a message...");
-        draftLabel->setFontSize(20.0f);
-        draftLabel->setSingleLine(false);
-        draftLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
-        draftLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
-        draftLabel->setTextColor(nvgRGB(150, 158, 176));
-        draftLabel->setGrow(1.0f);
-        draftBox->addView(draftLabel);
+        draftPreview = new PortraitDraftPreview();
+        draftPreview->setGrow(1.0f);
+        draftPreview->setWidthPercentage(100.0f);
+        draftBox->addView(draftPreview);
+
+        keyboardContainer = new brls::Box();
+        keyboardContainer->setAxis(brls::Axis::COLUMN);
+        keyboardContainer->setWidthPercentage(100.0f);
+        keyboardContainer->setGrow(1.0f);
+        this->addView(keyboardContainer);
 
         buildRows();
+        buildEmotePanel();
         refreshKeys();
         refreshDraft();
     }
@@ -847,6 +1067,26 @@ public:
         this->setWidth(width);
         this->setHeight(height);
     }
+
+    void setEmotePanelVisible(bool visible) {
+        if (emotePanelVisible == visible) return;
+        emotePanelVisible = visible;
+        keyboardContainer->setVisibility(
+            visible ? brls::Visibility::GONE : brls::Visibility::VISIBLE);
+        emotePanel->setVisibility(
+            visible ? brls::Visibility::VISIBLE : brls::Visibility::GONE);
+        if (visible) {
+            if (!emoteLoadStarted) loadEmotes();
+            emoteGrid->invalidate();
+            brls::sync([this]() {
+                if (emotePanelVisible && !emotes.empty())
+                    brls::Application::giveFocus(emoteGrid);
+            });
+        }
+        this->invalidate();
+    }
+
+    bool isEmotePanelVisible() const { return emotePanelVisible; }
 
 private:
     enum class KeyAction {
@@ -898,7 +1138,7 @@ private:
             row->setWidthPercentage(100.0f);
             row->setHeight(68.0f);
             row->setMarginBottom(rowIndex + 1 == layout.size() ? 0.0f : 5.0f);
-            this->addView(row);
+            keyboardContainer->addView(row);
 
             for (size_t column = 0; column < layout[rowIndex].size(); ++column) {
                 auto* key = new brls::Button();
@@ -937,6 +1177,7 @@ private:
     }
 
     void pressKey(size_t row, size_t column) {
+        twinx::haptics::keyboardPulse();
         const std::string key = currentLayout()[row][column];
         KeyAction action = KeyAction::Character;
         if (key == "Shift") action = KeyAction::Shift;
@@ -984,6 +1225,96 @@ private:
         refreshDraft();
     }
 
+    void insertEmote(const twitch::UserEmote& emote) {
+        if (emote.name.empty()) return;
+        std::string addition;
+        if (!draft.empty() &&
+            !std::isspace(static_cast<unsigned char>(draft.back())))
+            addition += ' ';
+        addition += emote.name;
+        addition += ' ';
+        if (draft.size() + addition.size() > MAX_MESSAGE_BYTES) {
+            brls::Application::notify(
+                "The Twitch message limit is 500 characters");
+            return;
+        }
+        draft += addition;
+        twitch::rememberRecentEmote(emote);
+        refreshDraft();
+    }
+
+    void buildEmotePanel() {
+        emotePanel = new brls::Box();
+        emotePanel->setAxis(brls::Axis::COLUMN);
+        emotePanel->setWidthPercentage(100.0f);
+        emotePanel->setGrow(1.0f);
+        emotePanel->setVisibility(brls::Visibility::GONE);
+        this->addView(emotePanel);
+
+        emoteStatus = new brls::Label();
+        emoteStatus->setText("Loading emotes...");
+        emoteStatus->setFontSize(15.0f);
+        emoteStatus->setTextColor(nvgRGB(168, 178, 197));
+        emoteStatus->setHeight(24.0f);
+        emoteStatus->setMarginBottom(6.0f);
+        emotePanel->addView(emoteStatus);
+
+        emoteGrid = new RecyclingGrid();
+        emoteGrid->setGrow(1.0f);
+        emoteGrid->spanCount = 8;
+        emoteGrid->estimatedRowHeight = 82.0f;
+        emoteGrid->estimatedRowSpace = 5.0f;
+        emoteGrid->preFetchLine = 2;
+        emoteGrid->setPadding(2, 2, 2, 2);
+        emoteGrid->registerCell(
+            "PortraitTwitchEmote",
+            []() { return new PortraitEmoteCell(); });
+        emoteGrid->setIndexNavigationEnabled(true);
+        emotePanel->addView(emoteGrid);
+        refreshEmoteGrid();
+    }
+
+    void refreshEmoteGrid() {
+        emoteStatus->setText(
+            loading
+                ? "Loading emotes..."
+                : emotes.empty()
+                    ? "No emotes available"
+                    : fmt::format("{} emotes", emotes.size()));
+        emoteGrid->setVisibility(brls::Visibility::GONE);
+        emoteGrid->setDataSource(new PortraitEmoteDataSource(
+            emotes,
+            [this](const twitch::UserEmote& emote) { insertEmote(emote); }));
+        emoteGrid->setVisibility(brls::Visibility::VISIBLE);
+        emoteGrid->invalidate();
+    }
+
+    void loadEmotes() {
+        emoteLoadStarted = true;
+        if (!twitch::hasUserEmotesScope()) {
+            loading = false;
+            refreshEmoteGrid();
+            return;
+        }
+
+        this->ptrLock();
+        twitch::loadUserEmotesAsync(
+            channel,
+            [this](twitch::UserEmoteCatalogue catalogue) {
+                emotes = std::move(catalogue.emotes);
+                loading = false;
+                refreshEmoteGrid();
+                refreshDraft();
+                this->ptrUnlock();
+            },
+            [this](const std::string& error) {
+                loading = false;
+                refreshEmoteGrid();
+                emoteStatus->setText(error);
+                this->ptrUnlock();
+            });
+    }
+
     void eraseLastCodepoint() {
         if (draft.empty()) return;
         size_t position = draft.size() - 1;
@@ -1004,22 +1335,28 @@ private:
     }
 
     void refreshDraft() {
-        const bool empty = draft.empty();
-        draftLabel->setText(empty ? "Type a message..." : draft);
-        draftLabel->setTextColor(
-            empty ? nvgRGB(150, 158, 176) : nvgRGB(244, 246, 250));
+        draftPreview->configure(draft, emotes);
         counter->setText(
             fmt::format("{} / {}", draft.size(), MAX_MESSAGE_BYTES));
         this->invalidate();
     }
 
     static constexpr size_t MAX_MESSAGE_BYTES = 500;
+    std::string channel;
     SendCallback sendRequested;
     std::string draft;
     bool shifted = false;
     bool symbols = false;
-    brls::Label* draftLabel = nullptr;
+    PortraitDraftPreview* draftPreview = nullptr;
     brls::Label* counter = nullptr;
+    brls::Box* keyboardContainer = nullptr;
+    brls::Box* emotePanel = nullptr;
+    brls::Label* emoteStatus = nullptr;
+    RecyclingGrid* emoteGrid = nullptr;
+    std::vector<twitch::UserEmote> emotes;
+    bool loading = true;
+    bool emoteLoadStarted = false;
+    bool emotePanelVisible = false;
     std::vector<KeySlot> slots;
 };
 
@@ -1893,6 +2230,7 @@ public:
 
         if (!this->twitchChannel.empty()) {
             portraitComposer = new PortraitChatComposer(
+                this->twitchChannel,
                 [this](const std::string& message) {
                     return sendPortraitMessage(message);
                 });
@@ -1986,6 +2324,35 @@ public:
                     return true;
                 },
                 false);
+
+            portraitDpadLeftAction = this->registerAction(
+                "",
+                brls::BUTTON_LEFT,
+                [this](brls::View*) {
+                    return handlePortraitDpad(false);
+                },
+                true);
+            portraitDpadRightAction = this->registerAction(
+                "",
+                brls::BUTTON_RIGHT,
+                [this](brls::View*) {
+                    return handlePortraitDpad(true);
+                },
+                true);
+            portraitNavLeftAction = this->registerAction(
+                "",
+                brls::BUTTON_NAV_LEFT,
+                [this](brls::View*) {
+                    return handlePortraitDpad(false);
+                },
+                true);
+            portraitNavRightAction = this->registerAction(
+                "",
+                brls::BUTTON_NAV_RIGHT,
+                [this](brls::View*) {
+                    return handlePortraitDpad(true);
+                },
+                true);
 
             channelSubscribeID =
                 view->getChannelEvent()->subscribe(
@@ -2213,6 +2580,26 @@ public:
         if (chatModeAction != ACTION_NONE) {
             this->unregisterAction(chatModeAction);
             chatModeAction = ACTION_NONE;
+        }
+
+        if (portraitDpadLeftAction != ACTION_NONE) {
+            this->unregisterAction(portraitDpadLeftAction);
+            portraitDpadLeftAction = ACTION_NONE;
+        }
+
+        if (portraitDpadRightAction != ACTION_NONE) {
+            this->unregisterAction(portraitDpadRightAction);
+            portraitDpadRightAction = ACTION_NONE;
+        }
+
+        if (portraitNavLeftAction != ACTION_NONE) {
+            this->unregisterAction(portraitNavLeftAction);
+            portraitNavLeftAction = ACTION_NONE;
+        }
+
+        if (portraitNavRightAction != ACTION_NONE) {
+            this->unregisterAction(portraitNavRightAction);
+            portraitNavRightAction = ACTION_NONE;
         }
 
         if (chatUi) chatUi->alive.store(false);
@@ -2588,7 +2975,22 @@ public:
                     ? brls::ContentOrientation::PORTRAIT_COUNTER_CLOCKWISE
                     : brls::ContentOrientation::LANDSCAPE);
 
+        if (!portraitLayout && portraitComposer)
+            portraitComposer->setEmotePanelVisible(false);
+
         applyChatPreferences(currentChatPreferences);
+    }
+
+    bool handlePortraitDpad(bool physicalRight) {
+        if (!portraitLayout || !portraitComposer) return false;
+
+        const bool screenUp =
+            portraitOrientation ==
+                twinx::portrait::DisplayOrientation::PortraitCounterClockwise
+                ? physicalRight
+                : !physicalRight;
+        portraitComposer->setEmotePanelVisible(screenUp);
+        return true;
     }
 
     void applyTwitchVideoLayout(
@@ -2801,6 +3203,10 @@ private:
     twitch::ChatPreferences currentChatPreferences;
     brls::ActionIdentifier chatSendAction = ACTION_NONE;
     brls::ActionIdentifier chatModeAction = ACTION_NONE;
+    brls::ActionIdentifier portraitDpadLeftAction = ACTION_NONE;
+    brls::ActionIdentifier portraitDpadRightAction = ACTION_NONE;
+    brls::ActionIdentifier portraitNavLeftAction = ACTION_NONE;
+    brls::ActionIdentifier portraitNavRightAction = ACTION_NONE;
     uint64_t playbackSessionId = 0;
     bool portraitLayout = false;
     float portraitVideoHeight = 405.0f;
