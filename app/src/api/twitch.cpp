@@ -332,6 +332,11 @@ Config loadConfig() {
 
 Resolution resolveLive(const Config& config) {
     Config clean = config;
+    // Portrait Lab experiment: use Twitch's embedded-player playback identity.
+    // Force it here so a legacy twinx.txt player_type entry cannot silently
+    // turn this controlled test back into the regular site-player request.
+    clean.playerType = "embed";
+    brls::Logger::info("Twitch live resolver player type: {}", clean.playerType);
     clean.channel = normalizeChannel(clean.channel);
     if (clean.channel.empty())
         throw std::runtime_error("No Twitch channel is configured in /switch/twinx.txt");

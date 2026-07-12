@@ -11,7 +11,7 @@ namespace twitch {
 struct Config {
     std::string channel;
     std::string preferredQuality = "source";
-    std::string playerType = "site";
+    std::string playerType = "embed";
 
     // Public Twitch application ID used by OAuth Device Code Flow and Helix.
     std::string oauthClientId = "1a0hyv0sxnwpkvde7pjyo4gpwcnwj9";
