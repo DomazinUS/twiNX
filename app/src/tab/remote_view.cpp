@@ -24,6 +24,7 @@
 #include <atomic>
 #include <deque>
 #include <memory>
+#include <optional>
 #include <sstream>
 #include <chrono>
 #include <cmath>
@@ -782,6 +783,246 @@ private:
     bool showTimestamp = false;
 };
 
+
+class PortraitChatComposer : public brls::Box {
+public:
+    using SendCallback = std::function<bool(const std::string&)>;
+
+    explicit PortraitChatComposer(SendCallback sendRequested)
+        : sendRequested(std::move(sendRequested)) {
+        this->setAxis(brls::Axis::COLUMN);
+        this->setWidthPercentage(100.0f);
+        this->setHeight(485.0f);
+        this->setPadding(10, 12, 10, 12);
+        this->setBackgroundColor(nvgRGB(10, 12, 18));
+        this->setVisibility(brls::Visibility::GONE);
+
+        auto* draftBox = new brls::Box();
+        draftBox->setAxis(brls::Axis::COLUMN);
+        draftBox->setWidthPercentage(100.0f);
+        draftBox->setHeight(88.0f);
+        draftBox->setPadding(9, 14, 8, 14);
+        draftBox->setMarginBottom(8.0f);
+        draftBox->setCornerRadius(6.0f);
+        draftBox->setBackgroundColor(nvgRGB(28, 33, 43));
+        this->addView(draftBox);
+
+        auto* draftHeader = new brls::Box();
+        draftHeader->setAxis(brls::Axis::ROW);
+        draftHeader->setWidthPercentage(100.0f);
+        draftHeader->setHeight(22.0f);
+        draftBox->addView(draftHeader);
+
+        auto* caption = new brls::Label();
+        caption->setText("Message");
+        caption->setFontSize(14.0f);
+        caption->setTextColor(nvgRGB(168, 178, 197));
+        caption->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+        caption->setGrow(1.0f);
+        draftHeader->addView(caption);
+
+        counter = new brls::Label();
+        counter->setText("0 / 500");
+        counter->setFontSize(13.0f);
+        counter->setTextColor(nvgRGB(142, 151, 170));
+        counter->setHorizontalAlign(brls::HorizontalAlign::RIGHT);
+        draftHeader->addView(counter);
+
+        draftLabel = new brls::Label();
+        draftLabel->setText("Type a message...");
+        draftLabel->setFontSize(20.0f);
+        draftLabel->setSingleLine(false);
+        draftLabel->setHorizontalAlign(brls::HorizontalAlign::LEFT);
+        draftLabel->setVerticalAlign(brls::VerticalAlign::CENTER);
+        draftLabel->setTextColor(nvgRGB(150, 158, 176));
+        draftLabel->setGrow(1.0f);
+        draftBox->addView(draftLabel);
+
+        buildRows();
+        refreshKeys();
+        refreshDraft();
+    }
+
+    void setFrameSize(float width, float height) {
+        this->setWidth(width);
+        this->setHeight(height);
+    }
+
+private:
+    enum class KeyAction {
+        Character,
+        Shift,
+        Symbols,
+        Backspace,
+        Space,
+        Send,
+    };
+
+    struct KeySlot {
+        brls::Button* button = nullptr;
+        size_t row = 0;
+        size_t column = 0;
+    };
+
+    static const std::vector<std::vector<std::string>>& alphaLayout() {
+        static const std::vector<std::vector<std::string>> layout = {
+            {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"},
+            {"q", "w", "e", "r", "t", "y", "u", "i", "o", "p"},
+            {"a", "s", "d", "f", "g", "h", "j", "k", "l", "'"},
+            {"Shift", "z", "x", "c", "v", "b", "n", "m", "Back"},
+            {"#+=", "Space", ",", ".", "Send"},
+        };
+        return layout;
+    }
+
+    static const std::vector<std::vector<std::string>>& symbolLayout() {
+        static const std::vector<std::vector<std::string>> layout = {
+            {"1", "2", "3", "4", "5", "6", "7", "8", "9", "0"},
+            {"!", "@", "#", "$", "%", "^", "&", "*", "(", ")"},
+            {"-", "_", "=", "+", "[", "]", "{", "}", "\\", "/"},
+            {"ABC", ":", ";", "\"", "'", "<", ">", "?", "Back"},
+            {"ABC", "Space", ",", ".", "Send"},
+        };
+        return layout;
+    }
+
+    const std::vector<std::vector<std::string>>& currentLayout() const {
+        return symbols ? symbolLayout() : alphaLayout();
+    }
+
+    void buildRows() {
+        const auto& layout = alphaLayout();
+        for (size_t rowIndex = 0; rowIndex < layout.size(); ++rowIndex) {
+            auto* row = new brls::Box();
+            row->setAxis(brls::Axis::ROW);
+            row->setWidthPercentage(100.0f);
+            row->setHeight(68.0f);
+            row->setMarginBottom(rowIndex + 1 == layout.size() ? 0.0f : 5.0f);
+            this->addView(row);
+
+            for (size_t column = 0; column < layout[rowIndex].size(); ++column) {
+                auto* key = new brls::Button();
+                key->setHeight(68.0f);
+                key->setGrow(
+                    rowIndex == 4 && column == 1 ? 4.0f :
+                    rowIndex == 4 && column == 4 ? 2.0f : 1.0f);
+                key->setMarginRight(
+                    column + 1 == layout[rowIndex].size() ? 0.0f : 5.0f);
+                key->setStyle(
+                    rowIndex == 4 && column == 4
+                        ? &brls::BUTTONSTYLE_PRIMARY
+                        : &brls::BUTTONSTYLE_DEFAULT);
+                key->setFontSize(18.0f);
+                key->registerClickAction(
+                    [this, rowIndex, column](brls::View*) {
+                        pressKey(rowIndex, column);
+                        return true;
+                    });
+                key->addGestureRecognizer(new brls::TapGestureRecognizer(key));
+                row->addView(key);
+                slots.push_back({key, rowIndex, column});
+            }
+        }
+    }
+
+    void refreshKeys() {
+        const auto& layout = currentLayout();
+        for (auto& slot : slots) {
+            std::string label = layout[slot.row][slot.column];
+            if (!symbols && shifted && label.size() == 1 &&
+                label[0] >= 'a' && label[0] <= 'z')
+                label[0] = static_cast<char>(label[0] - 'a' + 'A');
+            slot.button->setText(label);
+        }
+    }
+
+    void pressKey(size_t row, size_t column) {
+        const std::string key = currentLayout()[row][column];
+        KeyAction action = KeyAction::Character;
+        if (key == "Shift") action = KeyAction::Shift;
+        else if (key == "#+=" || key == "ABC") action = KeyAction::Symbols;
+        else if (key == "Back") action = KeyAction::Backspace;
+        else if (key == "Space") action = KeyAction::Space;
+        else if (key == "Send") action = KeyAction::Send;
+
+        switch (action) {
+            case KeyAction::Shift:
+                shifted = !shifted;
+                refreshKeys();
+                return;
+            case KeyAction::Symbols:
+                symbols = !symbols;
+                shifted = false;
+                refreshKeys();
+                return;
+            case KeyAction::Backspace:
+                eraseLastCodepoint();
+                refreshDraft();
+                return;
+            case KeyAction::Space:
+                append(" ");
+                return;
+            case KeyAction::Send:
+                send();
+                return;
+            case KeyAction::Character:
+                std::string value = key;
+                if (!symbols && shifted && value.size() == 1 &&
+                    value[0] >= 'a' && value[0] <= 'z') {
+                    value[0] = static_cast<char>(value[0] - 'a' + 'A');
+                    shifted = false;
+                    refreshKeys();
+                }
+                append(value);
+                return;
+        }
+    }
+
+    void append(const std::string& value) {
+        if (draft.size() + value.size() > MAX_MESSAGE_BYTES) return;
+        draft += value;
+        refreshDraft();
+    }
+
+    void eraseLastCodepoint() {
+        if (draft.empty()) return;
+        size_t position = draft.size() - 1;
+        while (position > 0 &&
+            (static_cast<unsigned char>(draft[position]) & 0xC0) == 0x80)
+            --position;
+        draft.erase(position);
+    }
+
+    void send() {
+        if (draft.empty() || !sendRequested) return;
+        if (sendRequested(draft)) {
+            draft.clear();
+            shifted = false;
+            refreshKeys();
+            refreshDraft();
+        }
+    }
+
+    void refreshDraft() {
+        const bool empty = draft.empty();
+        draftLabel->setText(empty ? "Type a message..." : draft);
+        draftLabel->setTextColor(
+            empty ? nvgRGB(150, 158, 176) : nvgRGB(244, 246, 250));
+        counter->setText(
+            fmt::format("{} / {}", draft.size(), MAX_MESSAGE_BYTES));
+        this->invalidate();
+    }
+
+    static constexpr size_t MAX_MESSAGE_BYTES = 500;
+    SendCallback sendRequested;
+    std::string draft;
+    bool shifted = false;
+    bool symbols = false;
+    brls::Label* draftLabel = nullptr;
+    brls::Label* counter = nullptr;
+    std::vector<KeySlot> slots;
+};
+
 class TwitchChatPanel : public brls::Box {
 public:
     TwitchChatPanel(
@@ -940,6 +1181,7 @@ public:
         this->setWidth(width);
         this->setHeight(height);
         this->setBackgroundColor(nvgRGBA(18, 23, 34, 255));
+        composeButton->setVisibility(brls::Visibility::GONE);
         refresh();
     }
 
@@ -1649,6 +1891,14 @@ public:
                 closePlayback);
         this->addView(chatDockedPanel);
 
+        if (!this->twitchChannel.empty()) {
+            portraitComposer = new PortraitChatComposer(
+                [this](const std::string& message) {
+                    return sendPortraitMessage(message);
+                });
+            this->addView(portraitComposer);
+        }
+
         chatUi = std::make_shared<ChatUiState>();
         chatUi->overlayPanel = chatOverlayPanel;
         chatUi->dockedPanel = chatDockedPanel;
@@ -2208,6 +2458,34 @@ public:
         }
     }
 
+
+    bool sendPortraitMessage(const std::string& message) {
+        const auto preferences = twitch::loadChatPreferences();
+        if (preferences.participation !=
+            twitch::ChatParticipation::Interactive) {
+            brls::Application::notify(
+                "Enable Interactive under Chat participation first");
+            return false;
+        }
+        if (!twitch::hasChatWriteScope()) {
+            brls::Application::notify(
+                "Sign out and sign in again once to enable interactive chat");
+            return false;
+        }
+        if (message.empty()) return false;
+
+        twitch::sendChatMessageAsync(
+            twitchChannel,
+            message,
+            [](const std::string&) {
+                brls::Application::notify("twiNX: chat message sent");
+            },
+            [](const std::string& error) {
+                brls::Application::notify("twiNX chat error: " + error);
+            });
+        return true;
+    }
+
     void openChatComposer() {
         const auto preferences =
             twitch::loadChatPreferences();
@@ -2437,13 +2715,19 @@ public:
             this->setAxis(brls::Axis::COLUMN);
             this->setDimensions(width, height);
             portraitVideoHeight = std::min(width * 9.0f / 16.0f, height * 0.42f);
+            const float composerHeight = std::min(485.0f, height * 0.42f);
+            const float chatHeight = std::max(
+                240.0f,
+                height - portraitVideoHeight - composerHeight);
             view->setGrow(0.0f);
             view->setDimensions(width, portraitVideoHeight);
             chatOverlayPanel->setVisibility(brls::Visibility::GONE);
             chatDockedPanel->setVisibility(brls::Visibility::VISIBLE);
-            chatDockedPanel->setPortraitFrame(
-                width,
-                std::max(240.0f, height - portraitVideoHeight));
+            chatDockedPanel->setPortraitFrame(width, chatHeight);
+            if (portraitComposer) {
+                portraitComposer->setFrameSize(width, composerHeight);
+                portraitComposer->setVisibility(brls::Visibility::VISIBLE);
+            }
             startChat();
             applyTwitchVideoLayout(preferences);
             this->invalidate();
@@ -2452,6 +2736,8 @@ public:
 
         this->setAxis(brls::Axis::ROW);
         this->setDimensions(width, height);
+        if (portraitComposer)
+            portraitComposer->setVisibility(brls::Visibility::GONE);
         view->setGrow(1.0f);
         applyTwitchVideoLayout(preferences);
 
@@ -2507,6 +2793,7 @@ private:
         orientationSubscribeID;
     TwitchChatPanel* chatOverlayPanel = nullptr;
     TwitchChatPanel* chatDockedPanel = nullptr;
+    PortraitChatComposer* portraitComposer = nullptr;
     std::shared_ptr<ChatUiState> chatUi;
     std::shared_ptr<TwitchPlaybackRecoveryState> playbackRecovery;
     std::unique_ptr<twitch::ChatClient> chatClient;
