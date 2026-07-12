@@ -22,7 +22,7 @@ namespace fs = std::filesystem;
 
 std::string settingsPath() {
 #if defined(__SWITCH__)
-    return "sdmc:/config/TwiNXPortraitExperimental/settings.json";
+    return "sdmc:/config/TwiNX/settings.json";
 #else
     return "settings.json";
 #endif
@@ -313,7 +313,7 @@ Config loadConfig() {
     const std::vector<std::string> candidates = {
 #if defined(__SWITCH__)
         "sdmc:/switch/twinx.txt",
-        "sdmc:/config/TwiNXPortraitExperimental/twinx.txt",
+        "sdmc:/config/TwiNX/twinx.txt",
 #endif
         "twinx.txt",
     };
@@ -332,9 +332,9 @@ Config loadConfig() {
 
 Resolution resolveLive(const Config& config) {
     Config clean = config;
-    // Portrait Lab experiment: use Twitch's embedded-player playback identity.
-    // Force it here so a legacy twinx.txt player_type entry cannot silently
-    // turn this controlled test back into the regular site-player request.
+    // The embedded-player identity avoids Twitch's stitched commercial
+    // presentation and its disruptive media timeline transitions. Force it
+    // here so a legacy twinx.txt value cannot silently restore site playback.
     clean.playerType = "embed";
     brls::Logger::info("Twitch live resolver player type: {}", clean.playerType);
     clean.channel = normalizeChannel(clean.channel);
@@ -388,7 +388,7 @@ std::string mpvExtra() {
         "cache=yes",
         "cache-secs=8",
         "referrer=\"https://player.twitch.tv\"",
-        "user-agent=\"Mozilla/5.0 (Nintendo Switch; TwiNX/0.4.8)\"",
+        "user-agent=\"Mozilla/5.0 (Nintendo Switch; twiNX/0.9.0)\"",
         "http-header-fields=\"Origin: https://player.twitch.tv\"",
     };
 

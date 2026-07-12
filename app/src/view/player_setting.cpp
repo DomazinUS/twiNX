@@ -244,12 +244,12 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
                 if (!controller.setMode(
                         static_cast<twinx::portrait::OrientationMode>(bounded))) {
                     brls::Application::notify(
-                        "Portrait Lab: could not save orientation preference");
+                        "twiNX: could not save orientation preference");
                     return;
                 }
                 if (bounded == 0) {
                     brls::Application::notify(
-                        "Portrait Lab: automatic Joy-Con orientation enabled");
+                        "twiNX: automatic Joy-Con orientation enabled");
                 }
             });
 
@@ -266,7 +266,7 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
                     static_cast<float>(std::clamp(selected, 0, 4)) / 4.0f;
                 if (!twinx::haptics::setKeyboardIntensity(intensity))
                     brls::Application::notify(
-                        "Portrait Lab: could not save vibration preference");
+                        "twiNX: could not save vibration preference");
                 twinx::haptics::keyboardPulse();
             });
 

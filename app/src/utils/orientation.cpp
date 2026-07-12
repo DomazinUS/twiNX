@@ -47,7 +47,7 @@ void OrientationController::init() {
 #endif
 
     brls::Logger::info(
-        "Portrait Lab orientation initialized: mode={} orientation={}",
+        "twiNX orientation initialized: mode={} orientation={}",
         static_cast<int>(selectedMode),
         orientationName(currentOrientation));
 }
@@ -157,7 +157,7 @@ void OrientationController::applyOrientation(
     candidateOrientation = orientation;
     orientationChanged.fire(orientation);
     brls::Logger::info(
-        "Portrait Lab orientation changed: {}",
+        "twiNX orientation changed: {}",
         orientationName(orientation));
 }
 
@@ -175,9 +175,9 @@ const char* OrientationController::orientationName(
 
 std::string OrientationController::settingsPath() const {
 #if defined(__SWITCH__)
-    return "sdmc:/config/TwiNXPortraitExperimental/orientation.json";
+    return "sdmc:/config/TwiNX/orientation.json";
 #else
-    return "orientation-portrait-experimental.json";
+    return "orientation.json";
 #endif
 }
 
@@ -193,7 +193,7 @@ void OrientationController::load() {
             selectedMode = static_cast<OrientationMode>(value);
     } catch (const std::exception& error) {
         brls::Logger::warning(
-            "Portrait Lab could not load orientation setting: {}",
+            "twiNX could not load orientation setting: {}",
             error.what());
     }
 }
@@ -208,7 +208,7 @@ bool OrientationController::save() const {
         return output.good();
     } catch (const std::exception& error) {
         brls::Logger::warning(
-            "Portrait Lab could not save orientation setting: {}",
+            "twiNX could not save orientation setting: {}",
             error.what());
         return false;
     }

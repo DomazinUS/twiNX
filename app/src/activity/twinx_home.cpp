@@ -1301,13 +1301,22 @@ void TwiNXHome::showAbout() {
         "• Popular streams, categories and channel search\n"
         "• Detailed channel pages with broadcasts, clips and categories\n"
         "• Live, VOD and clip playback with quality selection\n"
-        "• Software, hardware and experimental Hybrid decoder modes\n"
-        "• Live chat with badges, Twitch emotes and message composer\n"
+        "• Embedded-player live resolution without the commercial-break slate\n"
+        "• Guarded software, hardware and Hybrid decoder modes\n"
+        "• Automatic Joy-Con portrait orientation in either direction\n"
+        "• Portrait stream, chat, draft, emote sheet and inline touch keyboard\n"
+        "• Live chat with badges, static/animated emotes and message composer\n"
+        "• Adjustable touch-keyboard haptic feedback\n"
         "• Docked and overlay chat, compact mode and four-corner placement\n"
-        "• Controller-first navigation designed for handheld and TV play");
+        "• Controller-first navigation designed for portrait, handheld and TV play");
 
     addSection("Changelog");
     addBody(
+        "0.9.0 — Added automatic smartphone-style portrait mode with a persistent "
+        "chat composer, inline keyboard, emote sheet and adjustable keyboard haptics. "
+        "Added a touch-accessible Send button, validated animated emotes, hardened "
+        "MPV/FFmpeg/NVTEGRA hardware playback and switched live resolution to Twitch's "
+        "embedded-player identity, avoiding the generic commercial-break presentation.\n\n"
         "0.8.1 — Corrected twiNX branding throughout the interface and added "
         "this About page with features, complete release history and credits.\n\n"
         "0.8.0 — Added the offline followed-channels row.\n\n"
@@ -1358,7 +1367,8 @@ void TwiNXHome::showAbout() {
     addBody(
         "Design, direction and project ownership: HiroshiYamauchi\n\n"
         "Built with Twitch APIs and chat services, mpv, FFmpeg, Borealis, "
-        "libcurl, libnx and devkitPro. Thanks to the Nintendo Switch "
+        "libcurl, libnx and devkitPro. Twire provided reference behavior for "
+        "embedded-player stream resolution. Thanks to the Nintendo Switch "
         "homebrew and open-source communities that make projects like "
         "twiNX possible.");
 

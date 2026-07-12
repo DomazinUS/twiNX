@@ -28,7 +28,7 @@ struct RawResponse {
 
 std::string oauthPath() {
 #if defined(__SWITCH__)
-    return "sdmc:/config/TwiNXPortraitExperimental/oauth.json";
+    return "sdmc:/config/TwiNX/oauth.json";
 #else
     return "oauth.json";
 #endif
@@ -59,7 +59,7 @@ RawResponse postFormRaw(const std::string& url, const HTTP::Form& form) {
     curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
     curl_easy_setopt(curl, CURLOPT_TIMEOUT_MS, 15000L);
     curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT_MS, 15000L);
-    curl_easy_setopt(curl, CURLOPT_USERAGENT, "twiNX/0.8.1 (Nintendo Switch)");
+    curl_easy_setopt(curl, CURLOPT_USERAGENT, "twiNX/0.9.0 (Nintendo Switch)");
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeBody);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response.body);
     curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);

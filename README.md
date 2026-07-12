@@ -19,12 +19,13 @@
 ## About
 
 **twiNX** is an independent Twitch client built specifically for Nintendo
-Switch homebrew. Its interface is designed around Joy-Con and Pro Controller
-navigation in both handheld and TV play.
+Switch homebrew. It combines native playback, Twitch browsing and interactive
+chat in an interface designed around Joy-Con, Pro Controller and touchscreen
+use in handheld, tabletop and television play.
 
-The project began as a native Twitch playback proof of concept and now includes
-account sign-in, browsing, channel pages, live streams, VODs, clips, chat,
-badges, emotes and flexible player layouts.
+Version 0.9.0 introduces an automatic smartphone-style portrait experience and
+embedded-player stream resolution that avoids Twitch's generic commercial-break
+presentation in supported streams.
 
 ## Features
 
@@ -47,18 +48,32 @@ badges, emotes and flexible player layouts.
 
 - Native Twitch live-stream, VOD and clip playback
 - Source and transcoded quality selection
-- Software decoding
-- Experimental hardware decoding
-- Experimental Hybrid decoding with software fallback
-- Commercial-break and playlist-transition recovery
+- Embedded-player live resolution that avoids the generic commercial-break slate
+- Software, hardware and Hybrid decoder modes
+- Hardened MPV/FFmpeg/NVTEGRA hardware-frame handling
 - Fullscreen, docked-chat and overlay-chat layouts
+- Live streams do not create unnecessary MPV watch-later files
+
+### Portrait mode
+
+- Automatic landscape and portrait detection from either attached Joy-Con
+- Clockwise and counter-clockwise portrait orientations
+- Manual orientation choices when sensor control is unavailable
+- Rotated 720 x 1280 touch surface with corrected touch coordinates
+- Stream, live chat, persistent message draft and inline keyboard on one screen
+- Touch keyboard/emote-sheet switching from the draft field
+- Portrait emote sheet with inline emote previews in the message draft
+- Adjustable touch-keyboard haptic feedback
+- Accidental left-side controls suppressed while holding the Switch vertically
 
 ### Live chat
 
 - Read and send Twitch chat messages
 - Twitch username colors and native badges
 - Global, channel, subscriber and exclusive emotes
+- Static and animated Twitch emotes
 - Message composer with Recent, Channel and All emote tabs
+- Touch-accessible Send button in the full composer
 - Multi-line message wrapping
 - Docked chat, full-height overlay and compact overlay
 - Four-corner overlay placement and configurable width
@@ -67,8 +82,8 @@ badges, emotes and flexible player layouts.
 
 - D-pad and left-stick focus navigation
 - Right-stick scrolling on long pages
-- Handheld and television-friendly layouts
-- Dedicated About page with features, credits and release history
+- Handheld, portrait and television-friendly layouts
+- Dedicated About page with features, credits and complete release history
 
 ## Installation
 
@@ -87,29 +102,34 @@ No legacy `twinx.txt` configuration file is required.
 
 ## Updating
 
-Replace the existing NRO in `/switch/twiNX/` with the newer release. Saved
-authentication and application preferences are stored separately from the
-executable.
+Replace the existing NRO in `/switch/twiNX/` with the newer release. OAuth,
+chat, decoder, orientation and interface preferences remain under
+`/config/TwiNX/` and are not stored inside the executable.
 
 ## Decoder modes
 
-- **Software:** recommended for maximum compatibility.
-- **Hardware — Experimental:** lower CPU usage where supported, but Twitch
-  presentation changes can require decoder recovery.
-- **Hybrid — Experimental:** begins in hardware mode, can fall back to software
-  during unstable transitions and may restore hardware decoding afterward.
+- **Software:** compatibility mode using CPU video decoding.
+- **Hardware - Experimental:** NVTEGRA decoding with the validated twiNX frame,
+  reference and transfer guards.
+- **Hybrid - Experimental:** starts in hardware and can use software recovery
+  during a disruptive playback transition.
+
+The embedded-player resolver introduced in 0.9.0 prevents the generic Twitch
+commercial presentation from entering the player in current testing, greatly
+reducing the discontinuities that previously stressed hardware decoding.
 
 ## Known limitations
 
-- Animated Twitch emotes are experimental and may remain on a static frame.
 - Some standard Unicode emoji characters may render as missing-glyph boxes.
-- Hardware and Hybrid behavior can vary by stream and selected quality.
-- Twitch may change undocumented playback behavior without notice.
+- Twitch may change its undocumented playback-token behavior without notice.
+- Automatic portrait detection requires at least one compatible attached
+  Joy-Con; manual orientation remains available from player settings.
+- Hardware and Hybrid decoding remain experimental across untested stream formats.
 
 ## Building from source
 
-See [BUILDING.md](BUILDING.md) for the Nintendo Switch toolchain, the exact
-FFmpeg/libnx TLS recipe used by the 0.8.1 release, and build commands.
+See [BUILDING.md](BUILDING.md) for the supported MPV 0.36 package, guarded
+FFmpeg 7.1/NVTEGRA recipe and Nintendo Switch build commands.
 
 Quick build after dependencies are prepared:
 
@@ -130,29 +150,29 @@ name is **twiNX**.
 
 Major milestones:
 
-- `0.1.0` — Initial native Twitch playback proof of concept
-- `0.2.0` — Twitch sign-in and content browsing
-- `0.3.0` — Channel details and quality selection
-- `0.4.0` — Read-only live chat
-- `0.4.2` — TV-style docked chat
-- `0.4.8` — Decoder mode selector
-- `0.5.0` — Expanded chat, badges and emotes
-- `0.6.0` — Chat composer and emote picker
-- `0.7.0` — Channel pages
-- `0.7.1` — VOD and clip playback
-- `0.7.2` — Experimental Hybrid decoder
-- `0.7.9` — Compact four-corner overlay chat
-- `0.8.0` — Offline followed channels
-- `0.8.1` — Correct branding, About page and complete in-app history
+- `0.1.0` - Initial native Twitch playback proof of concept
+- `0.2.0` - Twitch sign-in and content browsing
+- `0.3.0` - Channel details and quality selection
+- `0.4.0` - Read-only live chat
+- `0.4.2` - TV-style docked chat
+- `0.4.8` - Decoder mode selector
+- `0.5.0` - Expanded chat, badges and emotes
+- `0.6.0` - Chat composer and emote picker
+- `0.7.0` - Channel pages
+- `0.7.1` - VOD and clip playback
+- `0.7.9` - Compact four-corner overlay chat
+- `0.8.0` - Offline followed channels
+- `0.8.1` - Correct branding, About page and complete in-app history
+- `0.9.0` - Portrait mode, embedded-player resolution and hardened hardware playback
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 
 ## Credits
 
-- **HiroshiYamauchi** — twiNX creator and developer
-- **Switchfin contributors** — original Nintendo Switch UI/player/platform base
-- **Borealis contributors** — controller-first UI framework
-- **Twire contributors** — reference behavior for Twitch playback resolution
+- **HiroshiYamauchi** - twiNX creator and developer
+- **Switchfin contributors** - original Nintendo Switch UI/player/platform base
+- **Borealis contributors** - controller-first UI framework
+- **Twire contributors** - reference behavior for embedded-player resolution
 - **mpv, FFmpeg, libcurl, LunaSVG, libnx and devkitPro contributors**
 
 Full attribution is available in

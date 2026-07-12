@@ -37,7 +37,8 @@ The upstream license remains in `library/lunasvg/LICENSE` and is copied to
 
 - Upstream: `twireapp/Twire`, release `2.12.3`
 - Role: reference behavior studied while implementing Twitch playback-token,
-  Usher HLS, request-header and quality-resolution behavior
+  embedded-player identity, Usher HLS, request-header and quality-resolution
+  behavior
 - License: GNU General Public License version 3
 
 Twire is not bundled as an Android application or library. Its attribution is
@@ -49,17 +50,19 @@ preserved because it informed the independent twiNX resolver implementation.
 - Default upstream license: GPL version 2 or later; LGPL builds are possible
   only when configured without GPL-only files
 
-The Nintendo Switch build is linked through the devkitPro `switch-libmpv`
-package. The combined twiNX distribution is provided under GPL-3.0-only.
+The validated Nintendo Switch build uses the repository's patched
+`switch-libmpv 0.36.0-7` recipe. The combined twiNX distribution is provided
+under GPL-3.0-only.
 
 ## FFmpeg
 
-- Exact twiNX 0.8.1 recipe: FFmpeg 7.1, `switch-ffmpeg` package release 5
+- Exact twiNX 0.9.0 recipe: FFmpeg 7.1, `switch-ffmpeg` package release 12
 - Role: demuxing, decoding, scaling and Nintendo Switch hardware acceleration
 - Build configuration: `--enable-gpl`
 
 The reproducible package recipe and patches are stored in
-`scripts/switch/ffmpeg-libnx/`. GPL-2.0 and GPL-3.0 license texts are included
+`scripts/switch/ffmpeg-libnx/`, including twiNX H.264-reference and NVTEGRA
+hardware-frame transfer guards. GPL-2.0 and GPL-3.0 license texts are included
 under `LICENSES/`.
 
 ## Other dependencies

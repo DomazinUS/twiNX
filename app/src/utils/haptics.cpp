@@ -21,9 +21,9 @@ std::atomic_uint64_t keyboardPulseGeneration{0};
 
 std::string settingsPath() {
 #if defined(__SWITCH__)
-    return "sdmc:/config/TwiNXPortraitExperimental/haptics.json";
+    return "sdmc:/config/TwiNX/haptics.json";
 #else
-    return "haptics-portrait-experimental.json";
+    return "haptics.json";
 #endif
 }
 
@@ -37,7 +37,7 @@ void load() {
             root.value("keyboard_intensity", 0.65f), 0.0f, 1.0f));
     } catch (const std::exception& error) {
         brls::Logger::warning(
-            "Portrait Lab could not load haptics settings: {}",
+            "twiNX could not load haptics settings: {}",
             error.what());
     }
 }
@@ -76,7 +76,7 @@ bool setKeyboardIntensity(float intensity) {
         return output.good();
     } catch (const std::exception& error) {
         brls::Logger::warning(
-            "Portrait Lab could not save haptics settings: {}",
+            "twiNX could not save haptics settings: {}",
             error.what());
         return false;
     }

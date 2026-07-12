@@ -36,7 +36,7 @@ constexpr size_t MAX_DEDUP_IDS = 128;
 
 std::string settingsPath() {
 #if defined(__SWITCH__)
-    return "sdmc:/config/TwiNXPortraitExperimental/settings.json";
+    return "sdmc:/config/TwiNX/settings.json";
 #else
     return "settings.json";
 #endif
@@ -199,7 +199,7 @@ public:
             "Connection: Upgrade\r\n"
             "Sec-WebSocket-Key: " + key + "\r\n"
             "Sec-WebSocket-Version: 13\r\n"
-            "User-Agent: TwiNX/0.4.0 (Nintendo Switch)\r\n\r\n";
+            "User-Agent: twiNX/0.9.0 (Nintendo Switch)\r\n\r\n";
 
         sendRaw(
             reinterpret_cast<const uint8_t*>(request.data()),

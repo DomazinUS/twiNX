@@ -11,6 +11,56 @@ history.
 
 ---
 
+## [0.9.0]
+
+### Added
+
+- Added a complete smartphone-style portrait player for handheld use.
+- Added automatic orientation detection using either attached Joy-Con.
+- Added clockwise and counter-clockwise portrait layouts plus manual orientation
+  choices when automatic sensor control is unavailable.
+- Added a rotated 720 x 1280 logical surface with inverse touchscreen-coordinate
+  mapping.
+- Added a portrait layout containing the live stream, live chat, persistent
+  message draft and app-native touch keyboard on one screen.
+- Added a portrait emote sheet that can replace the keyboard without closing the
+  composer.
+- Added two-way keyboard/emote-sheet switching by touching the message draft.
+- Added inline emote images to the portrait message draft.
+- Added adjustable touch-keyboard Joy-Con haptic feedback.
+- Added an on-screen **Send** button to the full Twitch emote composer.
+
+### Changed
+
+- Live playback now requests Twitch's embedded-player identity. In validation,
+  this bypasses the generic commercial-break presentation and continues directly
+  with the broadcaster's stream.
+- Promoted the tested portrait-mode work from an isolated experiment into the
+  production twiNX application.
+- Suppressed the left analog stick, stick click, `L`, `ZL`, `Minus` and the two
+  inward-facing left Joy-Con buttons while in portrait mode to prevent accidental
+  input.
+- Restored all production metadata, OAuth data and preferences to the existing
+  `twiNX` application and `/config/TwiNX/` paths.
+- Updated Nintendo Switch application metadata to version `0.9.0`.
+- Animated Twitch emotes are now treated as a supported chat option after
+  successful console validation.
+
+### Fixed
+
+- Hardened the FFmpeg/NVTEGRA H.264 reference, decode-map and hardware-frame
+  transfer paths against damaged or discontinuous Twitch media.
+- Hardened MPV hardware-frame side-data handling.
+- Prevented malformed decoder state from becoming a fatal null dereference or
+  delayed heap-corruption crash.
+- Preserved production playback and chat performance by keeping verbose playback
+  diagnostics disabled in release builds.
+- Prevented Twitch live streams from writing unnecessary MPV watch-later state.
+- Retained the existing guarded hardware playback stack while removing the
+  commercial presentation that most frequently triggered unsafe transitions.
+
+---
+
 ## [0.8.1]
 
 ### Added
