@@ -1510,6 +1510,14 @@ public:
         refresh();
     }
 
+    void replaceMessages(
+        const std::deque<twitch::ChatMessage>& value) {
+        messages = value;
+        while (messages.size() > MAX_MESSAGES)
+            messages.pop_front();
+        refresh();
+    }
+
     float width() const { return panelWidth; }
 
     void setPortraitFrame(float width, float height) {
@@ -1601,18 +1609,34 @@ private:
 
 struct ChatUiState {
     std::atomic_bool alive{true};
-    TwitchChatPanel* overlayPanel = nullptr;
-    TwitchChatPanel* dockedPanel = nullptr;
+    TwitchChatPanel* activePanel = nullptr;
+    std::deque<twitch::ChatMessage> messages;
+    std::string status;
 
     void append(twitch::ChatMessage message) {
-        if (overlayPanel) overlayPanel->append(message);
-        if (dockedPanel) dockedPanel->append(std::move(message));
+        if (activePanel) activePanel->append(message);
+        messages.push_back(std::move(message));
+        while (messages.size() > MAX_MESSAGES)
+            messages.pop_front();
     }
 
-    void setStatus(const std::string& status) {
-        if (overlayPanel) overlayPanel->setStatus(status);
-        if (dockedPanel) dockedPanel->setStatus(status);
+    void setStatus(const std::string& value) {
+        status = value;
+        if (activePanel) activePanel->setStatus(value);
     }
+
+    void activate(TwitchChatPanel* panel) {
+        if (activePanel == panel) return;
+
+        activePanel = panel;
+        if (!activePanel) return;
+
+        activePanel->replaceMessages(messages);
+        activePanel->setStatus(status);
+    }
+
+private:
+    static constexpr size_t MAX_MESSAGES = 72;
 };
 
 
@@ -2238,8 +2262,6 @@ public:
         }
 
         chatUi = std::make_shared<ChatUiState>();
-        chatUi->overlayPanel = chatOverlayPanel;
-        chatUi->dockedPanel = chatDockedPanel;
 
         if (this->twitchChannel.empty()) {
             chatOverlayPanel->setVisibility(brls::Visibility::GONE);
@@ -3126,6 +3148,7 @@ public:
             chatOverlayPanel->setVisibility(brls::Visibility::GONE);
             chatDockedPanel->setVisibility(brls::Visibility::VISIBLE);
             chatDockedPanel->setPortraitFrame(width, chatHeight);
+            chatUi->activate(chatDockedPanel);
             if (portraitComposer) {
                 portraitComposer->setFrameSize(width, composerHeight);
                 portraitComposer->setVisibility(brls::Visibility::VISIBLE);
@@ -3145,6 +3168,7 @@ public:
 
         switch (preferences.mode) {
         case twitch::ChatMode::Off:
+            chatUi->activate(nullptr);
             chatOverlayPanel->setVisibility(brls::Visibility::GONE);
             chatDockedPanel->setVisibility(brls::Visibility::GONE);
             view->setDimensions(width, height);
@@ -3163,6 +3187,7 @@ public:
                         static_cast<float>(
                             preferences.dockedWidth)),
                 height);
+            chatUi->activate(chatDockedPanel);
             startChat();
             break;
 
@@ -3170,6 +3195,7 @@ public:
             chatDockedPanel->setVisibility(brls::Visibility::GONE);
             chatOverlayPanel->setVisibility(brls::Visibility::VISIBLE);
             view->setDimensions(width, height);
+            chatUi->activate(chatOverlayPanel);
             startChat();
             break;
         }

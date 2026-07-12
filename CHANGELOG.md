@@ -55,6 +55,8 @@ history.
   delayed heap-corruption crash.
 - Preserved production playback and chat performance by keeping verbose playback
   diagnostics disabled in release builds.
+- Eliminated duplicate hidden-panel chat layout work so high-activity channels
+  update only the visible docked, overlay or portrait chat panel.
 - Prevented Twitch live streams from writing unnecessary MPV watch-later state.
 - Retained the existing guarded hardware playback stack while removing the
   commercial presentation that most frequently triggered unsafe transitions.
