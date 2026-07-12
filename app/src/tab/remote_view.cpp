@@ -17,6 +17,7 @@
 #include "utils/misc.hpp"
 #include "utils/config.hpp"
 #include "utils/image.hpp"
+#include "utils/orientation.hpp"
 
 #include <utility>
 #include <algorithm>
@@ -933,6 +934,15 @@ public:
 
     float width() const { return panelWidth; }
 
+    void setPortraitFrame(float width, float height) {
+        panelWidth = width;
+        panelHeight = height;
+        this->setWidth(width);
+        this->setHeight(height);
+        this->setBackgroundColor(nvgRGBA(18, 23, 34, 255));
+        refresh();
+    }
+
 private:
     void refresh() {
         for (auto* row : rows) row->clear();
@@ -1559,8 +1569,18 @@ void handleTwitchVideoReconfig(
         MpvEventEnum::VIDEO_RECONFIG);
 }
 
+const char* configuredVideoRotation() {
+    switch (MPVCore::VIDEO_ROTATION) {
+        case 1: return "90";
+        case 2: return "180";
+        case 3: return "270";
+        default: return "0";
+    }
+}
+
 void resetPlayerVideoLayout() {
     auto& mpv = MPVCore::instance();
+    mpv.command("set", "video-rotate", configuredVideoRotation());
     mpv.command("set", "video-margin-ratio-left", "0.0");
     mpv.command("set", "video-margin-ratio-right", "0.0");
     mpv.command("set", "video-margin-ratio-top", "0.0");
@@ -1698,6 +1718,15 @@ public:
                     });
             applyChatPreferences(
                 twitch::loadChatPreferences());
+
+            auto& orientationController =
+                twinx::portrait::OrientationController::instance();
+            orientationSubscribeID =
+                orientationController.getOrientationChanged()->subscribe(
+                    [this](twinx::portrait::DisplayOrientation orientation) {
+                        applyDisplayOrientation(orientation);
+                    });
+            applyDisplayOrientation(orientationController.orientation());
 
             chatModeAction = this->registerAction(
                 "Chat layout",
@@ -1938,9 +1967,21 @@ public:
 
         if (chatUi) chatUi->alive.store(false);
         chatClient.reset();
-        if (!this->twitchChannel.empty())
+        if (!this->twitchChannel.empty()) {
             twitch::chatPreferencesEvent()->unsubscribe(
                 chatPreferenceSubscribeID);
+            if (orientationSubscribeID) {
+                twinx::portrait::OrientationController::instance()
+                    .getOrientationChanged()->unsubscribe(*orientationSubscribeID);
+                orientationSubscribeID.reset();
+            }
+        }
+
+        if (portraitLayout) {
+            brls::Application::setContentOrientation(
+                brls::ContentOrientation::LANDSCAPE);
+            portraitLayout = false;
+        }
 
         auto& mpv = MPVCore::instance();
         mpv.getEvent()->unsubscribe(eventSubscribeID);
@@ -2256,10 +2297,62 @@ public:
             });
     }
 
+    void applyDisplayOrientation(
+        twinx::portrait::DisplayOrientation orientation) {
+        portraitOrientation = orientation;
+        portraitLayout =
+            orientation != twinx::portrait::DisplayOrientation::Landscape;
+
+        brls::Application::setContentOrientation(
+            orientation == twinx::portrait::DisplayOrientation::PortraitClockwise
+                ? brls::ContentOrientation::PORTRAIT_CLOCKWISE
+                : orientation == twinx::portrait::DisplayOrientation::PortraitCounterClockwise
+                    ? brls::ContentOrientation::PORTRAIT_COUNTER_CLOCKWISE
+                    : brls::ContentOrientation::LANDSCAPE);
+
+        applyChatPreferences(currentChatPreferences);
+    }
+
     void applyTwitchVideoLayout(
         const twitch::ChatPreferences& preferences) {
         const twitch::ChatMode mode = preferences.mode;
         auto& mpv = MPVCore::instance();
+
+        if (portraitLayout) {
+            const float occupied = std::clamp(
+                portraitVideoHeight /
+                    std::max(1.0f, brls::Application::contentHeight),
+                0.0f,
+                1.0f);
+            const float unused = 1.0f - occupied;
+            const bool clockwise =
+                portraitOrientation ==
+                twinx::portrait::DisplayOrientation::PortraitClockwise;
+
+            const std::string left =
+                fmt::format("{:.6f}", clockwise ? unused : 0.0f);
+            const std::string right =
+                fmt::format("{:.6f}", clockwise ? 0.0f : unused);
+
+            mpv.command("set", "video-margin-ratio-left", left.c_str());
+            mpv.command("set", "video-margin-ratio-right", right.c_str());
+            mpv.command("set", "video-margin-ratio-top", "0.0");
+            mpv.command("set", "video-margin-ratio-bottom", "0.0");
+            mpv.command("set", "video-rotate", clockwise ? "90" : "270");
+            mpv.command("set", "keepaspect", "yes");
+            mpv.command("set", "keepaspect-window", "no");
+            mpv.command("set", "video-aspect-override", "no");
+            mpv.command("set", "panscan", "0.0");
+            mpv.command("set", "video-zoom", "0.0");
+            mpv.command("set", "video-pan-x", "0.0");
+            mpv.command("set", "video-pan-y", "0.0");
+            mpv.command("set", "video-align-x", "0");
+            mpv.command("set", "video-align-y", "0");
+            mpv.command("set", "video-recenter", "yes");
+            return;
+        }
+
+        mpv.command("set", "video-rotate", configuredVideoRotation());
 
         // MPV renders directly into the full Switch framebuffer. Making the
         // Borealis VideoView narrower changes the OSD bounds, but does not by
@@ -2337,10 +2430,30 @@ public:
         chatDockedPanel->apply(preferences);
         updateChatInteractionAction(preferences);
 
-        applyTwitchVideoLayout(preferences);
-
         const float width = brls::Application::contentWidth;
         const float height = brls::Application::contentHeight;
+
+        if (portraitLayout) {
+            this->setAxis(brls::Axis::COLUMN);
+            this->setDimensions(width, height);
+            portraitVideoHeight = std::min(width * 9.0f / 16.0f, height * 0.42f);
+            view->setGrow(0.0f);
+            view->setDimensions(width, portraitVideoHeight);
+            chatOverlayPanel->setVisibility(brls::Visibility::GONE);
+            chatDockedPanel->setVisibility(brls::Visibility::VISIBLE);
+            chatDockedPanel->setPortraitFrame(
+                width,
+                std::max(240.0f, height - portraitVideoHeight));
+            startChat();
+            applyTwitchVideoLayout(preferences);
+            this->invalidate();
+            return;
+        }
+
+        this->setAxis(brls::Axis::ROW);
+        this->setDimensions(width, height);
+        view->setGrow(1.0f);
+        applyTwitchVideoLayout(preferences);
 
         switch (preferences.mode) {
         case twitch::ChatMode::Off:
@@ -2390,6 +2503,8 @@ private:
     HTTP::Cancel channelProfileCancel;
     twitch::UserProfile channelProfile;
     brls::Event<twitch::ChatPreferences>::Subscription chatPreferenceSubscribeID;
+    std::optional<brls::Event<twinx::portrait::DisplayOrientation>::Subscription>
+        orientationSubscribeID;
     TwitchChatPanel* chatOverlayPanel = nullptr;
     TwitchChatPanel* chatDockedPanel = nullptr;
     std::shared_ptr<ChatUiState> chatUi;
@@ -2400,6 +2515,10 @@ private:
     brls::ActionIdentifier chatSendAction = ACTION_NONE;
     brls::ActionIdentifier chatModeAction = ACTION_NONE;
     uint64_t playbackSessionId = 0;
+    bool portraitLayout = false;
+    float portraitVideoHeight = 405.0f;
+    twinx::portrait::DisplayOrientation portraitOrientation =
+        twinx::portrait::DisplayOrientation::Landscape;
     bool playerShuttingDown = false;
     bool navigatingToChannel = false;
 };

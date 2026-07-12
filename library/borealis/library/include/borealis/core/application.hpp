@@ -49,6 +49,13 @@ enum class InputType
     TOUCH, // Touch screen
 };
 
+enum class ContentOrientation
+{
+    LANDSCAPE,
+    PORTRAIT_CLOCKWISE,
+    PORTRAIT_COUNTER_CLOCKWISE,
+};
+
 class DebugLayer;
 class EditTextDialog;
 
@@ -100,6 +107,9 @@ class Application
      * Called when the video context is ready (to setup the initial content scaling).
      */
     static void setWindowSize(int width, int height);
+
+    static void setContentOrientation(ContentOrientation orientation);
+    static ContentOrientation getContentOrientation();
 
     /**
      * Called by the video context when the content window is Repositioned
@@ -204,6 +214,8 @@ class Application
     static std::string* getCommonFooter();
 
     inline static float windowScale;
+    inline static ContentOrientation contentOrientation =
+        ContentOrientation::LANDSCAPE;
 
     /**
      * Sets whether BUTTON_START will globally be used to close the application.

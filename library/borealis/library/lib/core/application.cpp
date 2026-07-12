@@ -750,7 +750,7 @@ void Application::frame()
     // Frame context
     FrameContext frameContext = FrameContext();
 
-    frameContext.pixelRatio = (float)Application::windowWidth / (float)Application::windowHeight;
+    frameContext.pixelRatio = Application::contentWidth / Application::contentHeight;
     frameContext.vg         = Application::getNVGContext();
     frameContext.fontStash  = &Application::fontStash;
     frameContext.theme      = Application::getTheme();
@@ -762,6 +762,17 @@ void Application::frame()
 
     nvgBeginFrame(frameContext.vg, Application::windowWidth, Application::windowHeight, scaleFactor);
     nvgScale(frameContext.vg, Application::windowScale, Application::windowScale);
+
+    if (Application::contentOrientation == ContentOrientation::PORTRAIT_CLOCKWISE)
+    {
+        nvgTranslate(frameContext.vg, Application::contentHeight, 0.0f);
+        nvgRotate(frameContext.vg, NVG_PI / 2.0f);
+    }
+    else if (Application::contentOrientation == ContentOrientation::PORTRAIT_COUNTER_CLOCKWISE)
+    {
+        nvgTranslate(frameContext.vg, 0.0f, Application::contentWidth);
+        nvgRotate(frameContext.vg, -NVG_PI / 2.0f);
+    }
 
     std::vector<View*> viewsToDraw;
 
@@ -1170,15 +1181,40 @@ void Application::setWindowSize(int width, int height)
     Application::windowWidth  = width;
     Application::windowHeight = height;
 
-    // Rescale UI
-    Application::windowScale   = (float)width / (float)ORIGINAL_WINDOW_WIDTH;
-    Application::contentWidth  = (float)ORIGINAL_WINDOW_WIDTH;
-    Application::contentHeight = std::ceil((float)height / Application::windowScale);
+    // Rescale UI. Portrait keeps the physical framebuffer unchanged and
+    // exposes a rotated 720 x 1280 logical canvas to Yoga/NanoVG.
+    if (Application::contentOrientation == ContentOrientation::LANDSCAPE)
+    {
+        Application::windowScale = (float)width / (float)ORIGINAL_WINDOW_WIDTH;
+        Application::contentWidth = (float)ORIGINAL_WINDOW_WIDTH;
+        Application::contentHeight = std::ceil((float)height / Application::windowScale);
+    }
+    else
+    {
+        Application::windowScale = (float)height / (float)ORIGINAL_WINDOW_HEIGHT;
+        Application::contentWidth = std::ceil((float)height / Application::windowScale);
+        Application::contentHeight = std::ceil((float)width / Application::windowScale);
+    }
 
     for (Activity* activity : Application::activitiesStack)
         activity->onWindowSizeChanged();
 
     brls::Application::setActiveEvent(true);
+}
+
+void Application::setContentOrientation(ContentOrientation orientation)
+{
+    if (Application::contentOrientation == orientation)
+        return;
+
+    Application::contentOrientation = orientation;
+    Application::setWindowSize(Application::windowWidth, Application::windowHeight);
+    Application::getWindowSizeChangedEvent()->fire();
+}
+
+ContentOrientation Application::getContentOrientation()
+{
+    return Application::contentOrientation;
 }
 
 void Application::onWindowResized(int width, int height)

@@ -285,8 +285,26 @@ void SwitchInputManager::updateTouchStates(std::vector<RawTouchState>* states)
             RawTouchState state;
             state.pressed    = true;
             state.fingerId   = hidState.touches[i].finger_id;
-            state.position.x = hidState.touches[i].x / Application::windowScale;
-            state.position.y = hidState.touches[i].y / Application::windowScale;
+            const float physicalX =
+                hidState.touches[i].x / Application::windowScale;
+            const float physicalY =
+                hidState.touches[i].y / Application::windowScale;
+
+            switch (Application::getContentOrientation())
+            {
+                case ContentOrientation::PORTRAIT_CLOCKWISE:
+                    state.position.x = physicalY;
+                    state.position.y = Application::contentHeight - physicalX;
+                    break;
+                case ContentOrientation::PORTRAIT_COUNTER_CLOCKWISE:
+                    state.position.x = Application::contentWidth - physicalY;
+                    state.position.y = physicalX;
+                    break;
+                default:
+                    state.position.x = physicalX;
+                    state.position.y = physicalY;
+                    break;
+            }
             states->push_back(state);
         }
     }

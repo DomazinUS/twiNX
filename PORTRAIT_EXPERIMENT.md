@@ -22,10 +22,11 @@ branch deliberately.
 ## Milestones
 
 1. Joy-Con accelerometer detection with filtering, hysteresis, and manual modes.
-2. Rotated 720 x 1280 logical surface with inverse touch-coordinate mapping.
+2. Rotated 720 x 1280 logical surface with inverse touch-coordinate mapping. (prototype implemented)
 3. Portrait player layout: stream, chat, message composer, inline keyboard.
 4. Controller-detached manual rotate control and persistence.
 5. Performance and long-session playback validation.
 
-The first milestone is implemented. Until milestone 2, orientation changes are
-reported and persisted but do not rotate the framebuffer.
+The first two milestones now have an experimental player-only prototype.
+Landscape remains unchanged; portrait currently shows video above a full-width
+chat panel. Inline keyboard composition remains a later milestone.
