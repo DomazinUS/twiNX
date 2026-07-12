@@ -5,6 +5,7 @@
 #include "view/mpv_core.hpp"
 #include "utils/config.hpp"
 #include "utils/misc.hpp"
+#include "utils/debug_log.hpp"
 #include <fmt/ranges.h>
 
 static inline void check_error(int status) {
@@ -113,6 +114,15 @@ MPVCore::MPVCore() {
 
 void MPVCore::init() {
     std::setlocale(LC_NUMERIC, "C");
+#if defined(TWINX_PLAYBACK_DEBUG)
+    twinx::debug::log(
+        "MPV_INIT",
+        "begin HARDWARE_DEC=%d hwdec_method=%s vo=%s cache_mb=%d",
+        MPVCore::HARDWARE_DEC ? 1 : 0,
+        MPVCore::PLAYER_HWDEC_METHOD.c_str(),
+        MPVCore::VO.c_str(),
+        MPVCore::INMEMORY_CACHE);
+#endif
 #ifdef ANDROID
     auto env = static_cast<JNIEnv *>(SDL_AndroidGetJNIEnv());
     if (!env->GetJavaVM(&g_vm) && g_vm) av_jni_set_java_vm(g_vm, NULL);
@@ -211,9 +221,25 @@ void MPVCore::init() {
 #endif
 
     if (mpv_initialize(mpv) < 0) {
+#if defined(TWINX_PLAYBACK_DEBUG)
+        twinx::debug::log("MPV_INIT", "mpv_initialize failed");
+#endif
         mpv_terminate_destroy(mpv);
         brls::fatal("Could not initialize mpv context");
     }
+
+#if defined(TWINX_PLAYBACK_DEBUG)
+    mpv_request_log_messages(mpv, "info");
+    twinx::debug::log(
+        "MPV_INIT",
+        "initialized client_api=0x%llx",
+        static_cast<unsigned long long>(mpv_client_api_version()));
+#endif
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
+    // Warnings include HLS corruption and NVTEGRA guard failures without the
+    // high-volume informational stream used by the crash diagnostic build.
+    mpv_request_log_messages(mpv, "warn");
+#endif
 
     this->setAspect(VIDEO_ASPECT);
 
@@ -536,11 +562,32 @@ std::string MPVCore::getCacheSpeed() const {
 void MPVCore::eventMainLoop() {
     while (true) {
         mpv_event *event = mpv_wait_event(this->mpv, 0);
+#if defined(TWINX_PLAYBACK_DEBUG)
+        if (event->event_id != MPV_EVENT_NONE &&
+            event->event_id != MPV_EVENT_PROPERTY_CHANGE) {
+            const char* eventName =
+                mpv_event_name(event->event_id);
+            twinx::debug::log(
+                "MPV_EVT",
+                "id=%d name=%s error=%d",
+                static_cast<int>(event->event_id),
+                eventName ? eventName : "unknown",
+                event->error);
+        }
+#endif
         switch (event->event_id) {
         case MPV_EVENT_NONE:
             return;
         case MPV_EVENT_LOG_MESSAGE: {
             auto log = (mpv_event_log_message *)event->data;
+#if defined(TWINX_PLAYBACK_DEBUG)
+            twinx::debug::log(
+                "MPV_LOG",
+                "level=%s prefix=%s text=%s",
+                log->level ? log->level : "?",
+                log->prefix ? log->prefix : "?",
+                log->text ? log->text : "");
+#endif
             if (log->log_level <= MPV_LOG_LEVEL_ERROR) {
                 brls::Logger::error("{}: {}", log->prefix, log->text);
             } else if (log->log_level <= MPV_LOG_LEVEL_WARN) {
@@ -559,19 +606,33 @@ void MPVCore::eventMainLoop() {
             return;
         case MPV_EVENT_FILE_LOADED:
             brls::Logger::info("MPVCore => EVENT_FILE_LOADED");
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
             this->logHardwareDecoderState("file-loaded");
+#endif
+#if defined(TWINX_PLAYBACK_DEBUG)
+            this->logPlaybackSnapshot("file-loaded");
+#endif
             // event 8: 文件预加载结束，准备解码
             mpvCoreEvent.fire(MpvEventEnum::MPV_LOADED);
             break;
         case MPV_EVENT_START_FILE:
             // event 6: 开始加载文件
             brls::Logger::info("MPVCore => EVENT_START_FILE");
+#if defined(TWINX_PLAYBACK_DEBUG)
+            this->logPlaybackSnapshot("start-file");
+#endif
             mpvCoreEvent.fire(MpvEventEnum::START_FILE);
             mpvCoreEvent.fire(MpvEventEnum::LOADING_START);
             break;
         case MPV_EVENT_PLAYBACK_RESTART:
             // event 21: 开始播放文件（一般是播放或调整进度结束之后触发）
             brls::Logger::info("MPVCore => EVENT_PLAYBACK_RESTART");
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
+            this->logPlaybackPerformance("playback-restart");
+#endif
+#if defined(TWINX_PLAYBACK_DEBUG)
+            this->logPlaybackSnapshot("playback-restart");
+#endif
             this->video_stopped = false;
             if (this->isPaused())
                 mpvCoreEvent.fire(MpvEventEnum::MPV_PAUSE);
@@ -580,13 +641,29 @@ void MPVCore::eventMainLoop() {
             break;
         case MPV_EVENT_VIDEO_RECONFIG:
             brls::Logger::warning("MPVCore => VIDEO_RECONFIG");
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
             this->logHardwareDecoderState("video-reconfig");
+#endif
+#if defined(TWINX_PLAYBACK_DEBUG)
+            this->logPlaybackSnapshot("video-reconfig");
+#endif
             mpvCoreEvent.fire(MpvEventEnum::VIDEO_RECONFIG);
             break;
         case MPV_EVENT_END_FILE: {
             // event 7: 文件播放结束
             this->video_stopped = true;
             auto node = (mpv_event_end_file *)event->data;
+#if defined(TWINX_PLAYBACK_DEBUG)
+            twinx::debug::log(
+                "MPV_END",
+                "reason=%d error=%d playlist_entry_id=%lld playlist_insert_id=%lld playlist_insert_num_entries=%d",
+                static_cast<int>(node->reason),
+                node->error,
+                static_cast<long long>(node->playlist_entry_id),
+                static_cast<long long>(node->playlist_insert_id),
+                node->playlist_insert_num_entries);
+            this->logPlaybackSnapshot("end-file");
+#endif
             if (node->reason == MPV_END_FILE_REASON_ERROR) {
                 brls::Logger::error(
                     "MPVCore => FILE ERROR: {} (live recovery: {})",
@@ -633,6 +710,18 @@ void MPVCore::eventMainLoop() {
             mpv_event_property *prop = (mpv_event_property *)event->data;
             if (prop->format == MPV_FORMAT_NONE) break;
 
+#if defined(TWINX_PLAYBACK_DEBUG)
+            if (event->reply_userdata != 4 &&
+                event->reply_userdata != 5) {
+                twinx::debug::log(
+                    "MPV_PROP",
+                    "userdata=%llu name=%s format=%d",
+                    static_cast<unsigned long long>(event->reply_userdata),
+                    prop->name ? prop->name : "?",
+                    static_cast<int>(prop->format));
+            }
+#endif
+
             switch (event->reply_userdata) {
             case 1:  // core-idle
                 if (!*(int *)prop->data) {
@@ -663,6 +752,13 @@ void MPVCore::eventMainLoop() {
                 this->playback_time = *(double *)prop->data;
                 if (video_progress != (int64_t)playback_time) {
                     video_progress = (int64_t)playback_time;
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
+                    const int64_t bucket = video_progress >= 0 ? video_progress / 10 : -1;
+                    if (bucket >= 0 && bucket != performanceLogBucket) {
+                        performanceLogBucket = bucket;
+                        this->logPlaybackPerformance("periodic");
+                    }
+#endif
                     mpvCoreEvent.fire(MpvEventEnum::UPDATE_PROGRESS);
                 }
                 break;
@@ -692,6 +788,76 @@ void MPVCore::eventMainLoop() {
     }
 }
 
+#if defined(TWINX_PLAYBACK_DEBUG)
+void MPVCore::logPlaybackSnapshot(const char* reason) {
+    if (!mpv) {
+        twinx::debug::log("MPV_SNAP", "reason=%s mpv=null", reason);
+        return;
+    }
+
+    const std::string path = getString("path");
+    const std::string title = getString("media-title");
+    const std::string fileFormat = getString("file-format");
+    const std::string videoCodec = getString("video-codec");
+    const std::string videoFormat = getString("video-format");
+    const std::string pixel = getString("video-params/pixelformat");
+    const std::string hwPixel = getString("video-params/hw-pixelformat");
+    const std::string hwdec = getString("hwdec-current");
+    const std::string interop = getString("hwdec-interop");
+    const int64_t width = getInt("video-params/w");
+    const int64_t height = getInt("video-params/h");
+    const int64_t displayWidth = getInt("video-params/dw");
+    const int64_t displayHeight = getInt("video-params/dh");
+    const int64_t playlistPosition = getInt("playlist-pos", -1);
+    const int64_t playlistCount = getInt("playlist-count", -1);
+    const int64_t pause = getInt("pause", -1);
+    const int64_t coreIdle = getInt("core-idle", -1);
+    const int64_t eof = getInt("eof-reached", -1);
+    const int64_t seeking = getInt("seeking", -1);
+
+    char safeTitle[161] = {};
+    std::snprintf(
+        safeTitle,
+        sizeof(safeTitle),
+        "%.*s",
+        160,
+        title.c_str());
+    for (char* cursor = safeTitle; *cursor; ++cursor) {
+        if (*cursor == '\r' || *cursor == '\n')
+            *cursor = ' ';
+    }
+
+    twinx::debug::log(
+        "MPV_SNAP",
+        "reason=%s path_len=%zu path_hash=%016llx title=%s "
+        "file_format=%s vcodec=%s vformat=%s pixel=%s hw_pixel=%s "
+        "hwdec=%s interop=%s size=%lldx%lld display=%lldx%lld "
+        "playlist=%lld/%lld pause=%lld idle=%lld eof=%lld seeking=%lld",
+        reason,
+        path.size(),
+        static_cast<unsigned long long>(twinx::debug::hashText(path)),
+        safeTitle[0] ? safeTitle : "<empty>",
+        fileFormat.c_str(),
+        videoCodec.c_str(),
+        videoFormat.c_str(),
+        pixel.c_str(),
+        hwPixel.c_str(),
+        hwdec.c_str(),
+        interop.c_str(),
+        static_cast<long long>(width),
+        static_cast<long long>(height),
+        static_cast<long long>(displayWidth),
+        static_cast<long long>(displayHeight),
+        static_cast<long long>(playlistPosition),
+        static_cast<long long>(playlistCount),
+        static_cast<long long>(pause),
+        static_cast<long long>(coreIdle),
+        static_cast<long long>(eof),
+        static_cast<long long>(seeking));
+}
+#endif
+
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
 void MPVCore::logHardwareDecoderState(const std::string& reason) {
     if (!mpv) return;
 
@@ -713,6 +879,31 @@ void MPVCore::logHardwareDecoderState(const std::string& reason) {
         width,
         height);
 }
+
+void MPVCore::logPlaybackPerformance(const char* reason) {
+    if (!mpv) return;
+
+    const std::string hwdec = getString("hwdec-current");
+    const std::string pixel = getString("video-params/pixelformat");
+    const std::string hwPixel = getString("video-params/hw-pixelformat");
+    const int64_t decoderDrops = getInt("decoder-frame-drop-count");
+    const int64_t outputDrops = getInt("frame-drop-count");
+    const int64_t mistimed = getInt("mistimed-frame-count");
+    const int64_t delayed = getInt("vo-delayed-frame-count");
+
+    brls::Logger::warning(
+        "twiNX PERF [{}]: hwdec='{}' pixel='{}' hw-pixel='{}' "
+        "decoder-drops={} output-drops={} mistimed={} delayed={}",
+        reason ? reason : "unknown",
+        hwdec.empty() ? "NONE" : hwdec,
+        pixel.empty() ? "unavailable" : pixel,
+        hwPixel.empty() ? "unavailable" : hwPixel,
+        decoderDrops,
+        outputDrops,
+        mistimed,
+        delayed);
+}
+#endif
 
 void MPVCore::prepareHardwareDecoderRecovery() {
     if (!mpv) return;
@@ -739,7 +930,9 @@ void MPVCore::prepareHardwareDecoderRecovery() {
         "hwdec",
         MPVCore::PLAYER_HWDEC_METHOD.c_str());
 
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
     this->logHardwareDecoderState("decoder-reset-requested");
+#endif
 }
 
 void MPVCore::reset() {
@@ -757,6 +950,16 @@ void MPVCore::reset() {
 }
 
 void MPVCore::setUrl(const std::string &url, const std::string &extra, const std::string &method, uint64_t userdata) {
+#if defined(TWINX_PLAYBACK_DEBUG)
+    twinx::debug::log(
+        "MPV_CMD",
+        "loadfile method=%s userdata=%llu url_len=%zu url_hash=%016llx extra_len=%zu",
+        method.c_str(),
+        static_cast<unsigned long long>(userdata),
+        url.size(),
+        static_cast<unsigned long long>(twinx::debug::hashText(url)),
+        extra.size());
+#endif
     brls::Logger::debug("MPVCore {} ({}) extra: ({})", method, url, extra);
     if (mpv_client_api_version() >= MPV_MAKE_VERSION(2, 3)) {
         const char *cmd[] = {"loadfile", url.c_str(), method.c_str(), "0", extra.c_str(), nullptr};
@@ -769,7 +972,12 @@ void MPVCore::setUrl(const std::string &url, const std::string &extra, const std
 
 void MPVCore::togglePlay() { this->command("cycle", "pause"); }
 
-void MPVCore::stop() { this->command("stop"); }
+void MPVCore::stop() {
+#if defined(TWINX_PLAYBACK_DEBUG)
+    twinx::debug::log("MPV_CMD", "stop requested");
+#endif
+    this->command("stop");
+}
 
 void MPVCore::seek(int64_t value, const std::string &flags) {
     std::string pos = std::to_string(value);

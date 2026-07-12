@@ -525,7 +525,7 @@ new file mode 100644
 index 0000000000..1978fcf644
 --- /dev/null
 +++ b/libavcodec/nvtegra_decode.c
-@@ -0,0 +1,517 @@
+@@ -0,0 +1,688 @@
 +/*
 + * Copyright (c) 2024 averne <averne381@gmail.com>
 + *
@@ -672,61 +672,179 @@ index 0000000000..1978fcf644
 +}
 +
 +static void nvtegra_fdd_priv_free(void *priv) {
-+    FFNVTegraDecodeFrame    *tf = priv;
-+    FFNVTegraDecodeContext *ctx = tf->ctx;
++    FFNVTegraDecodeFrame *tf = priv;
++    FFNVTegraDecodeContext *ctx;
 +
 +    if (!tf)
 +        return;
 +
-+    if (tf->in_flight)
-+        av_nvtegra_syncpt_wait(ctx->channel, tf->fence, -1);
++    ctx = tf->ctx;
++
++    /*
++     * A damaged/discontinuous HLS frame can reach cleanup with incomplete
++     * NVTEGRA state. Never dereference ctx/channel before validating them.
++     */
++    if (tf->in_flight) {
++        if (ctx && ctx->channel) {
++            int err = av_nvtegra_syncpt_wait(ctx->channel, tf->fence, -1);
++            if (err < 0)
++                av_log(NULL, AV_LOG_ERROR,
++                       "nvtegra: cleanup syncpoint wait failed: %d\n", err);
++        } else {
++            /*
++             * The decode job may still own input_map_ref. Releasing it here
++             * can turn an immediate NULL crash into delayed heap corruption.
++             * Quarantine this frame state instead; a bounded leak is safer
++             * than freeing memory that NVDEC may still be accessing.
++             */
++            av_log(NULL, AV_LOG_ERROR,
++                   "nvtegra: QUARANTINE in-flight frame because decode context/channel "
++                   "is missing (frame=%p map_ref=%p map=%p fence=%u bitstream=%u)\n",
++                   tf, tf->input_map_ref,
++                   tf->input_map_ref ? tf->input_map_ref->data : NULL,
++                   tf->fence, tf->bitstream_len);
++            return;
++        }
++        tf->in_flight = false;
++    }
 +
 +    av_buffer_unref(&tf->input_map_ref);
 +    av_freep(&tf);
 +}
 +
 +int ff_nvtegra_wait_decode(void *logctx, AVFrame *frame) {
-+    FrameDecodeData             *fdd = (FrameDecodeData *)frame->private_ref->data;
-+    FFNVTegraDecodeFrame         *tf = fdd->hwaccel_priv;
-+    FFNVTegraDecodeContext      *ctx = tf->ctx;
-+    AVNVTegraMap          *input_map = (AVNVTegraMap *)tf->input_map_ref->data;
-+    AVHWDeviceContext *hw_device_ctx = (AVHWDeviceContext *)ctx->hw_device_ref->data;
++    FrameDecodeData *fdd;
++    FFNVTegraDecodeFrame *tf;
++    FFNVTegraDecodeContext *ctx;
++    AVNVTegraMap *input_map;
++    AVHWDeviceContext *hw_device_ctx;
 +
 +    nvdec_status_s *nvdec_status;
 +    nvjpg_dec_status *nvjpg_status;
 +    uint32_t decode_cycles;
++    size_t input_map_size, status_size;
 +    uint8_t *mem;
 +    int err;
++
++    if (!frame || !frame->private_ref || !frame->private_ref->data) {
++        av_log(logctx, AV_LOG_ERROR,
++               "nvtegra: dropping decode result: frame/private_ref is missing\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    fdd = (FrameDecodeData *)frame->private_ref->data;
++    tf = fdd->hwaccel_priv;
++    if (!tf) {
++        av_log(logctx, AV_LOG_ERROR,
++               "nvtegra: dropping decode result: hwaccel frame state is missing\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    ctx = tf->ctx;
++    if (!ctx || !ctx->channel) {
++        av_log(logctx, AV_LOG_ERROR,
++               "nvtegra: deferring in-flight decode cleanup because context/channel "
++               "is missing (frame=%p map_ref=%p map=%p fence=%u bitstream=%u)\n",
++               tf, tf->input_map_ref,
++               tf->input_map_ref ? tf->input_map_ref->data : NULL,
++               tf->fence, tf->bitstream_len);
++        /* Keep in_flight set so nvtegra_fdd_priv_free() quarantines it. */
++        return AVERROR_INVALIDDATA;
++    }
 +
 +    if (!tf->in_flight)
 +        return 0;
 +
-+    mem = av_nvtegra_map_get_addr(input_map);
-+
++    /*
++     * Wait for the submitted decode before touching the input/status map.
++     * The previous implementation dereferenced input_map_ref->data first.
++     * The captured crash was exactly a NULL input map dereference at +0x48
++     * inside ff_nvtegra_wait_decode.
++     */
 +    err = av_nvtegra_syncpt_wait(ctx->channel, tf->fence, -1);
-+    if (err < 0)
++    if (err < 0) {
++        av_log(logctx, AV_LOG_ERROR,
++               "nvtegra: decode syncpoint wait failed: %d\n", err);
 +        return err;
++    }
 +
 +    tf->in_flight = false;
 +
++    if (!tf->input_map_ref || !tf->input_map_ref->data) {
++        av_log(logctx, AV_LOG_ERROR,
++               "nvtegra: dropping completed frame: input map reference/data is NULL "
++               "(ref=%p data=%p fence=%u bitstream=%u)\n",
++               tf->input_map_ref,
++               tf->input_map_ref ? tf->input_map_ref->data : NULL,
++               tf->fence, tf->bitstream_len);
++        return AVERROR_INVALIDDATA;
++    }
++
++    input_map = (AVNVTegraMap *)tf->input_map_ref->data;
++    mem = av_nvtegra_map_get_addr(input_map);
++    input_map_size = av_nvtegra_map_get_size(input_map);
++    status_size = ctx->is_nvjpg ? sizeof(*nvjpg_status) : sizeof(*nvdec_status);
++
++    if (!mem) {
++        av_log(logctx, AV_LOG_ERROR,
++               "nvtegra: dropping completed frame: input map address is NULL\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    if (ctx->status_off > input_map_size ||
++        status_size > input_map_size - ctx->status_off) {
++        av_log(logctx, AV_LOG_ERROR,
++               "nvtegra: dropping completed frame: invalid status range "
++               "(offset=%u size=%zu map=%zu)\n",
++               ctx->status_off, status_size, input_map_size);
++        return AVERROR_INVALIDDATA;
++    }
++
 +    if (!ctx->is_nvjpg) {
 +        nvdec_status = (nvdec_status_s *)(mem + ctx->status_off);
-+        if (nvdec_status->error_status != 0 || nvdec_status->mbs_in_error != 0)
-+            return AVERROR_UNKNOWN;
++        if (nvdec_status->error_status != 0 ||
++            nvdec_status->mbs_in_error != 0) {
++            av_log(logctx, AV_LOG_ERROR,
++                   "nvtegra: NVDEC reported a damaged frame "
++                   "(status=%u mbs_in_error=%u)\n",
++                   nvdec_status->error_status,
++                   nvdec_status->mbs_in_error);
++            return AVERROR_INVALIDDATA;
++        }
 +
 +        decode_cycles = nvdec_status->cycle_count * 16;
 +    } else {
 +        nvjpg_status = (nvjpg_dec_status *)(mem + ctx->status_off);
-+        if (nvjpg_status->error_status != 0 || nvjpg_status->bytes_offset == 0)
-+            return AVERROR_UNKNOWN;
++        if (nvjpg_status->error_status != 0 ||
++            nvjpg_status->bytes_offset == 0) {
++            av_log(logctx, AV_LOG_ERROR,
++                   "nvtegra: NVJPG reported a damaged frame "
++                   "(status=%u bytes_offset=%u)\n",
++                   nvjpg_status->error_status,
++                   nvjpg_status->bytes_offset);
++            return AVERROR_INVALIDDATA;
++        }
 +
 +        decode_cycles = nvjpg_status->cycle_count;
 +    }
 +
++    if (!ctx->hw_device_ref || !ctx->hw_device_ref->data) {
++        av_log(logctx, AV_LOG_ERROR,
++               "nvtegra: decoded frame is valid but hw device context is missing; "
++               "skipping DFS update\n");
++        return 0;
++    }
++
++    hw_device_ctx = (AVHWDeviceContext *)ctx->hw_device_ref->data;
++
 +    /* Decode time in µs: decode_cycles * 1000000 / ctx->channel->clock */
-+    err = av_nvtegra_dfs_update(hw_device_ctx, ctx->channel, tf->bitstream_len, decode_cycles);
-+    if (err < 0)
++    err = av_nvtegra_dfs_update(hw_device_ctx, ctx->channel,
++                                tf->bitstream_len, decode_cycles);
++    if (err < 0) {
++        av_log(logctx, AV_LOG_WARNING,
++               "nvtegra: DFS update failed after decode: %d\n", err);
 +        return err;
++    }
 +
 +    return 0;
 +}
@@ -765,13 +883,24 @@ index 0000000000..1978fcf644
 +        tf->ctx = ctx;
 +
 +        tf->input_map_ref = av_buffer_pool_get(ctx->decoder_pool);
-+        if (!tf->input_map_ref) {
++        if (!tf->input_map_ref || !tf->input_map_ref->data) {
++            av_log(avctx, AV_LOG_ERROR,
++                   "nvtegra: decoder pool returned an invalid input map "
++                   "(ref=%p data=%p)\n",
++                   tf->input_map_ref,
++                   tf->input_map_ref ? tf->input_map_ref->data : NULL);
 +            err = AVERROR(ENOMEM);
 +            goto fail;
 +        }
 +    }
 +
 +    tf = fdd->hwaccel_priv;
++    if (!tf || !tf->input_map_ref || !tf->input_map_ref->data) {
++        av_log(avctx, AV_LOG_ERROR,
++               "nvtegra: cannot start frame: input map state is missing\n");
++        return AVERROR_INVALIDDATA;
++    }
++
 +    tf->in_flight = false;
 +
 +    err = av_nvtegra_cmdbuf_add_memory(&ctx->cmdbuf, (AVNVTegraMap *)tf->input_map_ref->data,
@@ -794,16 +923,37 @@ index 0000000000..1978fcf644
 +                            const uint8_t *buf, uint32_t buf_size, bool add_startcode)
 +{
 +    FFNVTegraDecodeContext *ctx = avctx->internal->hwaccel_priv_data;
-+    FrameDecodeData        *fdd = (FrameDecodeData *)frame->private_ref->data;
-+    FFNVTegraDecodeFrame    *tf = fdd->hwaccel_priv;
-+    AVNVTegraMap     *input_map = (AVNVTegraMap *)tf->input_map_ref->data;
++    FrameDecodeData        *fdd;
++    FFNVTegraDecodeFrame    *tf;
++    AVNVTegraMap     *input_map;
 +
 +    bool need_bitstream_move = false;
 +    uint32_t old_bitstream_off, startcode_size;
 +    uint8_t *mem;
 +    int err;
 +
++    if (!avctx || !avctx->internal || !ctx || !frame ||
++        !frame->private_ref || !frame->private_ref->data) {
++        av_log(avctx, AV_LOG_ERROR,
++               "nvtegra: cannot append slice: frame/decode context is missing\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    fdd = (FrameDecodeData *)frame->private_ref->data;
++    tf = fdd->hwaccel_priv;
++    if (!tf || !tf->input_map_ref || !tf->input_map_ref->data) {
++        av_log(avctx, AV_LOG_ERROR,
++               "nvtegra: cannot append slice: input map state is missing\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    input_map = (AVNVTegraMap *)tf->input_map_ref->data;
 +    mem = av_nvtegra_map_get_addr(input_map);
++    if (!mem) {
++        av_log(avctx, AV_LOG_ERROR,
++               "nvtegra: cannot append slice: input map address is NULL\n");
++        return AVERROR_INVALIDDATA;
++    }
 +
 +    startcode_size = add_startcode ? 3 : 0;
 +
@@ -868,14 +1018,35 @@ index 0000000000..1978fcf644
 +int ff_nvtegra_end_frame(AVCodecContext *avctx, AVFrame *frame, FFNVTegraDecodeContext *ctx,
 +                         const uint8_t *end_sequence, int end_sequence_size)
 +{
-+    FrameDecodeData     *fdd = (FrameDecodeData *)frame->private_ref->data;
-+    FFNVTegraDecodeFrame *tf = fdd->hwaccel_priv;
-+    AVNVTegraMap  *input_map = (AVNVTegraMap *)tf->input_map_ref->data;
++    FrameDecodeData     *fdd;
++    FFNVTegraDecodeFrame *tf;
++    AVNVTegraMap  *input_map;
 +
 +    uint8_t *mem;
 +    int err;
 +
++    if (!avctx || !frame || !ctx || !ctx->channel ||
++        !frame->private_ref || !frame->private_ref->data) {
++        av_log(avctx, AV_LOG_ERROR,
++               "nvtegra: cannot submit frame: frame/decode context is missing\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    fdd = (FrameDecodeData *)frame->private_ref->data;
++    tf = fdd->hwaccel_priv;
++    if (!tf || !tf->input_map_ref || !tf->input_map_ref->data) {
++        av_log(avctx, AV_LOG_ERROR,
++               "nvtegra: cannot submit frame: input map state is missing\n");
++        return AVERROR_INVALIDDATA;
++    }
++
++    input_map = (AVNVTegraMap *)tf->input_map_ref->data;
 +    mem = av_nvtegra_map_get_addr(input_map);
++    if (!mem) {
++        av_log(avctx, AV_LOG_ERROR,
++               "nvtegra: cannot submit frame: input map address is NULL\n");
++        return AVERROR_INVALIDDATA;
++    }
 +
 +    /* Last slice data range */
 +    if (ctx->max_num_slices)

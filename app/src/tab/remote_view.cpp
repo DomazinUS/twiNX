@@ -1,4 +1,5 @@
 #include "tab/remote_view.hpp"
+#include "utils/debug_log.hpp"
 #include "view/recycling_grid.hpp"
 #include "view/svg_image.hpp"
 #include "view/video_view.hpp"
@@ -1035,6 +1036,12 @@ struct TwitchPlaybackRecoveryState {
     std::atomic_bool hybridSoftware{false};
     std::atomic_bool hybridRestoreEligible{false};
     std::atomic_bool decoderSwitching{false};
+    // Hardware-only recovery must not replace the playlist until MPV has
+    // confirmed that the old NVTEGRA-backed file has stopped. This prevents
+    // a new load from racing an in-flight hardware decode job.
+    std::atomic_bool waitingForHardwareStop{false};
+    std::atomic_int pendingRecoveryAttempt{0};
+    std::atomic_uint hardwareStopGeneration{0};
     std::atomic_int decoderMode{
         static_cast<int>(twitch::DecoderMode::Software)};
     std::atomic_int attempt{0};
@@ -1052,6 +1059,13 @@ constexpr int HYBRID_REARM_SECONDS = 3;
 void performTwitchPlaybackRecovery(
     const std::shared_ptr<TwitchPlaybackRecoveryState>& state,
     int attempt);
+
+void resolveTwitchReplacementPlaylist(
+    const std::shared_ptr<TwitchPlaybackRecoveryState>& state,
+    int attempt);
+
+void continueHardwareRecoveryAfterStop(
+    const std::shared_ptr<TwitchPlaybackRecoveryState>& state);
 
 void scheduleHybridHardwareRestore(
     const std::shared_ptr<TwitchPlaybackRecoveryState>& state) {
@@ -1147,8 +1161,10 @@ void scheduleHybridHardwareRestore(
                             state->hybridSoftware.store(false);
                             state->hardwareDecode.store(true);
                             state->reconfigArmed.store(true);
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
                             mpv.logHardwareDecoderState(
                                 "hybrid-hardware-restored");
+#endif
                             brls::Application::notify(
                                 "twiNX Hybrid: hardware decoding restored");
                         });
@@ -1227,6 +1243,88 @@ void useTwitchSoftwareDecoder(
         reason);
 }
 
+void resolveTwitchReplacementPlaylist(
+    const std::shared_ptr<TwitchPlaybackRecoveryState>& state,
+    int attempt) {
+    if (!state || !state->alive.load() || !state->recovering.load())
+        return;
+
+    auto config = twitch::loadConfig();
+    config.channel = state->channel;
+
+    twitch::resolveLiveAsync(
+        config,
+        [state](twitch::Resolution result) {
+            if (!state->alive.load() || !state->recovering.load()) return;
+
+            MPVCore::BOTTOM_BAR = false;
+            MPVCore::instance().setUrl(
+                result.selected.url,
+                twitch::mpvExtra());
+
+            // Recovery remains active until MPV_LOADED confirms that this
+            // replacement playlist actually opened.
+        },
+        [state, attempt](const std::string& error) {
+            if (!state->alive.load()) return;
+            scheduleTwitchPlaybackRetry(state, error);
+        });
+}
+
+void continueHardwareRecoveryAfterStop(
+    const std::shared_ptr<TwitchPlaybackRecoveryState>& state) {
+    if (!state || !state->alive.load() || !state->recovering.load())
+        return;
+
+    bool expected = true;
+    if (!state->waitingForHardwareStop.compare_exchange_strong(
+            expected,
+            false))
+        return;
+
+    const int attempt = state->pendingRecoveryAttempt.load();
+    brls::Logger::warning(
+        "twiNX: old hardware-decoded Twitch file stopped; "
+        "resolving a fresh playlist without toggling hwdec");
+    resolveTwitchReplacementPlaylist(state, attempt);
+}
+
+void scheduleHardwareStopWatchdog(
+    const std::shared_ptr<TwitchPlaybackRecoveryState>& state,
+    unsigned int generation) {
+    ThreadPool::instance().submit(
+        [state, generation](HTTP&) {
+            for (int elapsed = 0; elapsed < 5 && state->alive.load(); ++elapsed)
+                std::this_thread::sleep_for(std::chrono::seconds(1));
+
+            if (!state->alive.load()) return;
+
+            brls::sync([state, generation]() {
+                if (!state->alive.load() ||
+                    !state->recovering.load() ||
+                    !state->waitingForHardwareStop.load() ||
+                    generation != state->hardwareStopGeneration.load())
+                    return;
+
+                if (MPVCore::instance().isStopped()) {
+                    brls::Logger::warning(
+                        "twiNX: hardware stop confirmation event was delayed; "
+                        "continuing after MPV reported the file stopped");
+                    continueHardwareRecoveryAfterStop(state);
+                    return;
+                }
+
+                state->waitingForHardwareStop.store(false);
+                finishTwitchRecoveryFailure(
+                    state,
+                    "the hardware decoder did not stop cleanly");
+                brls::Logger::error(
+                    "twiNX: aborted hardware recovery because MPV did not "
+                    "confirm a clean stop within 5 seconds");
+            });
+        });
+}
+
 void performTwitchPlaybackRecovery(
     const std::shared_ptr<TwitchPlaybackRecoveryState>& state,
     int attempt) {
@@ -1236,10 +1334,40 @@ void performTwitchPlaybackRecovery(
     state->decoderMode.store(static_cast<int>(mode));
 
     if (mode == twitch::DecoderMode::Hardware) {
-        MPVCore::instance().prepareHardwareDecoderRecovery();
+        auto& mpv = MPVCore::instance();
         state->hardwareDecode.store(true);
         state->hybridSoftware.store(false);
-    } else if (mode == twitch::DecoderMode::Hybrid) {
+        state->reconfigArmed.store(false);
+        state->pendingRecoveryAttempt.store(attempt);
+
+        // Never toggle hwdec or discard decoder buffers while NVTEGRA may
+        // still be waiting on an in-flight frame. Stop the old file first and
+        // load the replacement only after MPV confirms MPV_STOP.
+        if (mpv.isStopped()) {
+            state->waitingForHardwareStop.store(false);
+            brls::Logger::warning(
+                "twiNX: hardware-decoded Twitch file had already ended; "
+                "resolving a fresh playlist");
+            resolveTwitchReplacementPlaylist(state, attempt);
+            return;
+        }
+
+        state->waitingForHardwareStop.store(true);
+        const unsigned int generation =
+            state->hardwareStopGeneration.fetch_add(1) + 1;
+
+        brls::Logger::warning(
+            "twiNX: stopping the old hardware-decoded Twitch file before "
+            "loading its replacement");
+        mpv.stop();
+        scheduleHardwareStopWatchdog(state, generation);
+        return;
+    }
+
+    state->waitingForHardwareStop.store(false);
+    state->hardwareStopGeneration.fetch_add(1);
+
+    if (mode == twitch::DecoderMode::Hybrid) {
         // The first dangerous Twitch transition moves Hybrid to software.
         // Subsequent recovery events keep software active until the return to
         // the normal presentation is confirmed and stable.
@@ -1257,36 +1385,37 @@ void performTwitchPlaybackRecovery(
         state->hybridSoftware.store(false);
     }
 
-    auto config = twitch::loadConfig();
-    config.channel = state->channel;
-
-    twitch::resolveLiveAsync(
-        config,
-        [state](twitch::Resolution result) {
-            if (!state->alive.load()) return;
-
-            MPVCore::BOTTOM_BAR = false;
-            MPVCore::instance().setUrl(
-                result.selected.url,
-                twitch::mpvExtra());
-
-            // Recovery remains active until MPV_LOADED confirms that this
-            // replacement playlist actually opened.
-        },
-        [state, attempt](const std::string& error) {
-            if (!state->alive.load()) return;
-            scheduleTwitchPlaybackRetry(state, error);
-        });
+    resolveTwitchReplacementPlaylist(state, attempt);
 }
 
 bool requestTwitchPlaybackRecovery(
     const std::shared_ptr<TwitchPlaybackRecoveryState>& state,
     MpvEventEnum event) {
+#if defined(TWINX_PLAYBACK_DEBUG)
+    twinx::debug::log(
+        "TW_RECOVERY",
+        "request event=%s(%d) state=%p alive=%d recovering=%d waiting_stop=%d switching=%d",
+        twinx::debug::playerEventName(static_cast<int>(event)),
+        static_cast<int>(event),
+        state.get(),
+        state && state->alive.load() ? 1 : 0,
+        state && state->recovering.load() ? 1 : 0,
+        state && state->waitingForHardwareStop.load() ? 1 : 0,
+        state && state->decoderSwitching.load() ? 1 : 0);
+#endif
     if (!state || !state->alive.load()) return true;
 
     if (state->decoderSwitching.load()) {
         brls::Logger::debug(
             "twiNX Hybrid: ignoring decoder-generated event {}",
+            static_cast<int>(event));
+        return true;
+    }
+
+    if (state->waitingForHardwareStop.load()) {
+        brls::Logger::debug(
+            "twiNX: ignoring event {} while waiting for the old "
+            "hardware-decoded file to stop",
             static_cast<int>(event));
         return true;
     }
@@ -1299,6 +1428,20 @@ bool requestTwitchPlaybackRecovery(
 
     const twitch::DecoderMode mode = twitch::loadDecoderMode();
     state->decoderMode.store(static_cast<int>(mode));
+
+    // Hardware-only mode must never force a decoder teardown or playlist
+    // replacement after MPV has begun processing a Twitch presentation
+    // transition. The Switch NVTEGRA path can still own frames inside
+    // mp_image_hw_download at this point. Let MPV finish naturally; if the
+    // presentation ends or errors, VideoView will show its normal controlled
+    // end/error UI instead of racing the hardware decoder.
+    if (mode == twitch::DecoderMode::Hardware) {
+        brls::Logger::warning(
+            "twiNX Hardware: automatic live recovery suppressed for event {} "
+            "to avoid tearing down an active NVTEGRA frame",
+            static_cast<int>(event));
+        return false;
+    }
 
     // A second transition while Hybrid is already in software is our signal
     // that Twitch has moved away from the inserted presentation. Hardware is
@@ -1337,6 +1480,17 @@ bool requestTwitchPlaybackRecovery(
 
 void handleTwitchVideoReconfig(
     const std::shared_ptr<TwitchPlaybackRecoveryState>& state) {
+#if defined(TWINX_PLAYBACK_DEBUG)
+    twinx::debug::log(
+        "TW_RECONFIG",
+        "enter state=%p alive=%d switching=%d armed=%d recovering=%d count=%d",
+        state.get(),
+        state && state->alive.load() ? 1 : 0,
+        state && state->decoderSwitching.load() ? 1 : 0,
+        state && state->reconfigArmed.load() ? 1 : 0,
+        state && state->recovering.load() ? 1 : 0,
+        state ? state->reconfigCount.load() : -1);
+#endif
     if (!state || !state->alive.load() ||
         state->decoderSwitching.load())
         return;
@@ -1365,6 +1519,17 @@ void handleTwitchVideoReconfig(
         now - state->lastReconfigRecovery < std::chrono::seconds(8)) {
         brls::Logger::debug(
             "twiNX: throttling repeated video reconfig {}",
+            count);
+        return;
+    }
+
+    if (mode == twitch::DecoderMode::Hardware) {
+        // Diagnostic/safety behavior: do not stop, reload, drop buffers, or
+        // change hwdec in response to VIDEO_RECONFIG. Any of those operations
+        // can race a hardware frame currently being downloaded by MPV.
+        brls::Logger::warning(
+            "twiNX Hardware: Twitch video reconfiguration {} detected; "
+            "leaving MPV/NVTEGRA untouched",
             count);
         return;
     }
@@ -1420,6 +1585,15 @@ public:
         : twitchChannel(std::move(twitchChannel)),
           playbackSessionId(++nextPlaybackSession) {
         activePlaybackSession.store(playbackSessionId);
+#if defined(TWINX_PLAYBACK_DEBUG)
+        twinx::debug::log(
+            "TW_PLAYER",
+            "construct session=%llu channel=%s item_type=%d item_name=%s",
+            static_cast<unsigned long long>(playbackSessionId),
+            this->twitchChannel.empty() ? "<non-twitch>" : this->twitchChannel.c_str(),
+            static_cast<int>(item.type),
+            item.name.c_str());
+#endif
         MPVCore::LIVE_STREAM_RECOVERY = !this->twitchChannel.empty();
         resetPlayerVideoLayout();
         float width = brls::Application::contentWidth;
@@ -1472,6 +1646,14 @@ public:
                 twitch::loadDecoderMode();
             const bool hardwareDecode =
                 twitch::decoderUsesHardware(decoderMode);
+#if defined(TWINX_PLAYBACK_DEBUG)
+            twinx::debug::log(
+                "TW_PLAYER",
+                "session=%llu decoder_mode=%d hardware=%d",
+                static_cast<unsigned long long>(playbackSessionId),
+                static_cast<int>(decoderMode),
+                hardwareDecode ? 1 : 0);
+#endif
             if (hardwareDecode) {
                 MPVCore::instance().command(
                     "set",
@@ -1570,6 +1752,22 @@ public:
                 activePlaybackSession.load() != playbackSessionId)
                 return;
 
+#if defined(TWINX_PLAYBACK_DEBUG)
+            twinx::debug::log(
+                "TW_EVENT",
+                "session=%llu event=%s(%d) recovery=%p recovering=%d armed=%d "
+                "hw=%d hybrid_sw=%d waiting_stop=%d",
+                static_cast<unsigned long long>(playbackSessionId),
+                twinx::debug::playerEventName(static_cast<int>(event)),
+                static_cast<int>(event),
+                playbackRecovery.get(),
+                playbackRecovery && playbackRecovery->recovering.load() ? 1 : 0,
+                playbackRecovery && playbackRecovery->reconfigArmed.load() ? 1 : 0,
+                playbackRecovery && playbackRecovery->hardwareDecode.load() ? 1 : 0,
+                playbackRecovery && playbackRecovery->hybridSoftware.load() ? 1 : 0,
+                playbackRecovery && playbackRecovery->waitingForHardwareStop.load() ? 1 : 0);
+#endif
+
             auto& mpv = MPVCore::instance();
             switch (event) {
             case MpvEventEnum::MPV_LOADED: {
@@ -1588,6 +1786,8 @@ public:
                             hardwareDecode);
                         playbackRecovery->lastLoadedAt =
                             std::chrono::steady_clock::now();
+                        playbackRecovery->waitingForHardwareStop.store(false);
+                        playbackRecovery->hardwareStopGeneration.fetch_add(1);
                         playbackRecovery->reconfigArmed.store(
                             decoderMode != twitch::DecoderMode::Software);
 
@@ -1604,13 +1804,17 @@ public:
                                 "set",
                                 "hwdec",
                                 "no");
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
                             MPVCore::instance().logHardwareDecoderState(
                                 "hybrid-software-transition");
+#endif
                         } else {
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
                             MPVCore::instance().logHardwareDecoderState(
                                 decoderMode == twitch::DecoderMode::Hybrid
                                     ? "hybrid-hardware"
                                     : "twitch-experimental-hardware");
+#endif
 
                             const std::string activeHwdec =
                                 MPVCore::instance().getString(
@@ -1658,6 +1862,11 @@ public:
                 }
                 break;
             }
+            case MpvEventEnum::MPV_STOP:
+                if (playbackRecovery &&
+                    playbackRecovery->waitingForHardwareStop.load())
+                    continueHardwareRecoveryAfterStop(playbackRecovery);
+                break;
             case MpvEventEnum::VIDEO_RECONFIG:
                 if (playbackRecovery)
                     handleTwitchVideoReconfig(playbackRecovery);
@@ -1672,6 +1881,14 @@ public:
     }
 
     ~RemotePlayer() override {
+#if defined(TWINX_PLAYBACK_DEBUG)
+        twinx::debug::log(
+            "TW_PLAYER",
+            "destruct session=%llu channel=%s owns=%d",
+            static_cast<unsigned long long>(playbackSessionId),
+            this->twitchChannel.empty() ? "<non-twitch>" : this->twitchChannel.c_str(),
+            activePlaybackSession.load() == playbackSessionId ? 1 : 0);
+#endif
         playerShuttingDown = true;
         const bool ownsPlayback =
             activePlaybackSession.load() == playbackSessionId;
@@ -1703,6 +1920,8 @@ public:
             playbackRecovery->retryScheduled.store(false);
             playbackRecovery->reconfigArmed.store(false);
             playbackRecovery->decoderSwitching.store(false);
+            playbackRecovery->waitingForHardwareStop.store(false);
+            playbackRecovery->hardwareStopGeneration.fetch_add(1);
             playbackRecovery->restoreGeneration.fetch_add(1);
         }
         view->setPlaybackRecoveryHandler({});
@@ -1732,7 +1951,12 @@ public:
             view->getChannelEvent()->unsubscribe(
                 channelSubscribeID);
         view->getSettingEvent()->unsubscribe(settingSubscribeID);
-        mpv.command("write-watch-later-config");
+        if (this->twitchChannel.empty()) {
+            mpv.command("write-watch-later-config");
+        } else {
+            brls::Logger::debug(
+                "twiNX: skipped watch-later write for Twitch live playback");
+        }
     }
 
     void willDisappear(bool resetState) override {

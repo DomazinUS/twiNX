@@ -478,15 +478,24 @@ TwitchChatComposer::TwitchChatComposer(
         nvgRGB(160, 170, 190));
     headingRow->addView(statusLabel);
 
+    auto* composerRow = new brls::Box();
+    composerRow->setAxis(brls::Axis::ROW);
+    composerRow->setWidthPercentage(100);
+    composerRow->setHeight(112);
+    composerRow->setAlignItems(brls::AlignItems::CENTER);
+    composerRow->setMarginBottom(12);
+    this->addView(composerRow);
+
     draftButton = new brls::Box();
     draftButton->setFocusable(true);
     draftButton->setAxis(brls::Axis::COLUMN);
+    draftButton->setGrow(1.0f);
     draftButton->setHeight(112);
     draftButton->setPadding(12, 16, 10, 16);
     draftButton->setCornerRadius(8);
     draftButton->setBackgroundColor(
         nvgRGB(29, 33, 43));
-    draftButton->setMarginBottom(12);
+    draftButton->setMarginRight(12);
     draftButton->addGestureRecognizer(
         new brls::TapGestureRecognizer(
             draftButton));
@@ -495,7 +504,33 @@ TwitchChatComposer::TwitchChatComposer(
             openKeyboard();
             return true;
         });
-    this->addView(draftButton);
+    composerRow->addView(draftButton);
+
+    sendButton = makeActionButton(
+        "Send",
+        &sendLabel);
+    sendButton->setWidth(150);
+    sendButton->setHeight(112);
+    sendButton->setMarginRight(0);
+    sendButton->setAlignItems(
+        brls::AlignItems::CENTER);
+    sendButton->setJustifyContent(
+        brls::JustifyContent::CENTER);
+    sendButton->setBackgroundColor(
+        nvgRGB(102, 51, 153));
+    sendButton->registerClickAction(
+        [this](brls::View*) {
+            sendMessage();
+            return true;
+        });
+    composerRow->addView(sendButton);
+
+    draftButton->setCustomNavigationRoute(
+        brls::FocusDirection::RIGHT,
+        sendButton);
+    sendButton->setCustomNavigationRoute(
+        brls::FocusDirection::LEFT,
+        draftButton);
 
     auto* draftHeader = new brls::Box();
     draftHeader->setAxis(brls::Axis::ROW);
@@ -826,6 +861,8 @@ void TwitchChatComposer::sendMessage() {
     }
 
     sending = true;
+    if (sendLabel)
+        sendLabel->setText("Sending...");
     statusLabel->setText(
         "Sending message…");
 
@@ -844,6 +881,8 @@ void TwitchChatComposer::sendMessage() {
         },
         [this](const std::string& error) {
             sending = false;
+            if (sendLabel)
+                sendLabel->setText("Send");
             statusLabel->setText(error);
             brls::Application::notify(
                 "twiNX chat error: " + error);
@@ -961,6 +1000,18 @@ void TwitchChatComposer::updateTabs() {
         tab == Tab::All
             ? active
             : inactive);
+
+    if (sendButton) {
+        brls::View* activeTab = recentTab;
+        if (tab == Tab::Channel && channelSubscribed)
+            activeTab = channelTab;
+        else if (tab == Tab::All)
+            activeTab = allTab;
+
+        sendButton->setCustomNavigationRoute(
+            brls::FocusDirection::DOWN,
+            activeTab);
+    }
 }
 
 std::vector<twitch::UserEmote>

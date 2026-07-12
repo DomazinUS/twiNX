@@ -127,4 +127,7 @@ private:
     struct curl_slist* chunk;
     Cancel is_cancel;
     Progress event;
+    // Cancellation is needed for image requests, but progress callbacks are
+    // enabled only for callers that explicitly request progress reporting.
+    bool report_progress = false;
 };

@@ -6,19 +6,21 @@
 
 pkgname=switch-ffmpeg
 pkgver=7.1
-pkgrel=5
+pkgrel=12
 pkgdesc='ffmpeg port (for Nintendo Switch homebrew development)'
 arch=('any')
 url='https://ffmpeg.org/'
 license=('GPL')
 options=(!strip staticlibs)
-makedepends=('switch-pkg-config' 'dkp-toolchain-vars')
+makedepends=('switch-pkg-config' 'dkp-toolchain-vars' 'python')
 depends=('switch-zlib' 'switch-bzip2' 'switch-libass' 'switch-libfribidi'
          'switch-freetype' 'switch-dav1d')
-source=("https://ffmpeg.org/releases/ffmpeg-${pkgver}.tar.xz" "ffmpeg-${pkgver}.patch" "tls.patch")
+source=("https://ffmpeg.org/releases/ffmpeg-${pkgver}.tar.xz" "ffmpeg-${pkgver}.patch" "tls.patch" "twinx_patch_nvtegra_h264_refs.py" "twinx_patch_nvtegra_transfer_guard.py")
 sha256sums=('40973d44970dbc83ef302b0609f2e74982be2d85916dd2ee7472d30678a7abe6'
-            '1792380b992e3554a4abcddf0d7b395bfd8c118ac7c6e38c8f2fb0d39753a390'
-            '57ea7ec8ed26d13d3172d0fd589b7883d22f0c180d50b7434fcc73fb2b3ab7d7')
+            'e24c6bcf934f9e86a0bf150a806b0bedf6e3232fdeccd8ff8301f1e991b67896'
+            '57ea7ec8ed26d13d3172d0fd589b7883d22f0c180d50b7434fcc73fb2b3ab7d7'
+            'fd379bef2dc71a602dc86b77ee74b37ebce289fb6bd526d40751be090b2f3a24'
+            '02348cd1372b0b2e8d9315f6584a188b08003f8babf0a269bcab7b286f11bf65')
 
 groups=('switch-portlibs')
 
@@ -26,6 +28,8 @@ prepare() {
   cd ffmpeg-$pkgver
   patch -Np1 -i "$srcdir/ffmpeg-${pkgver}.patch"
   patch -Np1 -i "$srcdir/tls.patch"
+  python "$srcdir/twinx_patch_nvtegra_h264_refs.py" libavcodec/nvtegra_h264.c
+  python "$srcdir/twinx_patch_nvtegra_transfer_guard.py" libavutil/hwcontext_nvtegra.c
 }
 
 build() {

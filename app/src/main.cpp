@@ -3,6 +3,7 @@
 #include "utils/config.hpp"
 #include "utils/download.hpp"
 #include "utils/thread.hpp"
+#include "utils/debug_log.hpp"
 #include "api/analytics.hpp"
 
 #include "view/svg_image.hpp"
@@ -41,6 +42,12 @@
 using namespace brls::literals;  // for _i18n
 
 int main(int argc, char* argv[]) {
+#if defined(TWINX_PLAYBACK_DEBUG)
+    // switch_wrapper.c has already connected stdio to nxlink before main().
+    // Disable buffering so the last record before a fatal crash reaches the PC.
+    std::setvbuf(stdout, nullptr, _IONBF, 0);
+    std::setvbuf(stderr, nullptr, _IONBF, 0);
+#endif
     std::vector<std::string> items;
     for (int i = 1; i < argc; i++) {
         if (std::strcmp(argv[i], "-d") == 0) {
@@ -66,6 +73,18 @@ int main(int argc, char* argv[]) {
     if (!conf.init()) {
         return 0;
     }
+
+#if defined(TWINX_PLAYBACK_DEBUG)
+    twinx::debug::init(
+        conf.configDir() + "/twinx-playback-debug.log");
+    twinx::debug::log(
+        "APP",
+        "boot version=%s platform=%s commit=%s argc=%d",
+        AppVersion::getVersion().c_str(),
+        AppVersion::getPlatform().c_str(),
+        AppVersion::getCommit().c_str(),
+        argc);
+#endif
 
     // Init the app and i18n
     if (!brls::Application::init()) {
@@ -119,6 +138,10 @@ int main(int argc, char* argv[]) {
     ThreadPool::instance().stop();
 
     conf.checkRestart(argv);
+#if defined(TWINX_PLAYBACK_DEBUG)
+    twinx::debug::log("APP", "main loop exited normally");
+    twinx::debug::shutdown();
+#endif
     // Exit
     return EXIT_SUCCESS;
 }

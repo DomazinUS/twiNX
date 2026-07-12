@@ -110,14 +110,26 @@ public:
     // this is not a software-decoding fallback.
     void prepareHardwareDecoderRecovery();
 
-    // Logs the active decoder, interop, pixel formats, and dimensions.
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
+    // Diagnostic decoder and frame-timing probes. Production builds compile
+    // these out so playback transitions perform no synchronous MPV queries.
     void logHardwareDecoderState(const std::string& reason);
+    void logPlaybackPerformance(const char* reason);
+#endif
+
+#if defined(TWINX_PLAYBACK_DEBUG)
+    // Writes a bounded, privacy-safe snapshot of the active MPV presentation.
+    void logPlaybackSnapshot(const char* reason);
+#endif
 
     MPVMap supportCodecs();
 
     // core states
     int64_t duration = 0;  // second
     int64_t video_progress = 0;
+#if defined(TWINX_PLAYBACK_PERF_DEBUG)
+    int64_t performanceLogBucket = -1;
+#endif
     int64_t volume = 0;
     double video_speed = 0;
     double playback_time = 0;

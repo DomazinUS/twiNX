@@ -52,7 +52,9 @@ private:
     TwitchDraftPreview* draftPreview = nullptr;
     brls::Label* counterLabel = nullptr;
     brls::Label* focusedEmoteLabel = nullptr;
+    brls::Label* sendLabel = nullptr;
     brls::Box* draftButton = nullptr;
+    brls::Box* sendButton = nullptr;
     brls::Box* recentTab = nullptr;
     brls::Box* channelTab = nullptr;
     brls::Box* allTab = nullptr;

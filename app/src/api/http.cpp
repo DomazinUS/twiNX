@@ -118,6 +118,9 @@ HTTP::HTTP() : chunk(nullptr) {
     // enable all supported built-in compressions
     curl_easy_setopt(this->easy, CURLOPT_ACCEPT_ENCODING, "");
     curl_easy_setopt(this->easy, CURLOPT_VERBOSE, 0L);
+    // Persistent worker handles must begin each request without libcurl's
+    // terminal progress meter. Cancellable requests enable only our callback.
+    curl_easy_setopt(this->easy, CURLOPT_NOPROGRESS, 1L);
     curl_easy_setopt(this->easy, CURLOPT_SSL_VERIFYPEER, 0L);
     curl_easy_setopt(this->easy, CURLOPT_SSL_VERIFYHOST, 0L);
 #if LIBCURL_VERSION_NUM >= 0x071900 && !defined(__PS4__)
@@ -156,19 +159,27 @@ void HTTP::set_option(const Timeout& t) {
 
 int HTTP::easy_progress_cb(void* clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
     HTTP* ctx = reinterpret_cast<HTTP*>(clientp);
-    ctx->event.fire(dltotal, dlnow);
-    return ctx->is_cancel->load() ? 1 : CURL_PROGRESSFUNC_CONTINUE;
+    if (ctx->report_progress)
+        ctx->event.fire(dltotal, dlnow);
+
+    // Returning CURL_PROGRESSFUNC_CONTINUE invokes libcurl's built-in
+    // terminal meter. Returning zero continues silently.
+    return ctx->is_cancel && ctx->is_cancel->load() ? 1 : 0;
 }
 
 void HTTP::set_option(const Cancel& c) {
-    this->is_cancel = std::move(c);
+    this->is_cancel = c;
+    this->event.clear();
+    this->report_progress = false;
     curl_easy_setopt(this->easy, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(this->easy, CURLOPT_XFERINFOFUNCTION, easy_progress_cb);
     curl_easy_setopt(this->easy, CURLOPT_XFERINFODATA, this);
 }
 
 void HTTP::set_option(Progress::Callback p) {
-    this->event.subscribe(p);
+    this->event.clear();
+    this->event.subscribe(std::move(p));
+    this->report_progress = true;
     curl_easy_setopt(this->easy, CURLOPT_NOPROGRESS, 0L);
     curl_easy_setopt(this->easy, CURLOPT_XFERINFOFUNCTION, easy_progress_cb);
     curl_easy_setopt(this->easy, CURLOPT_XFERINFODATA, this);
@@ -208,6 +219,16 @@ int HTTP::perform(std::ostream* body) {
     curl_easy_setopt(this->easy, CURLOPT_PROXY, PROXY_STATUS ? PROXY.c_str() : nullptr);
 
     CURLcode res = curl_easy_perform(this->easy);
+
+    // ThreadPool workers reuse HTTP handles. Do not leak cancellation,
+    // subscribers, or progress-meter state into the next image request.
+    curl_easy_setopt(this->easy, CURLOPT_NOPROGRESS, 1L);
+    curl_easy_setopt(this->easy, CURLOPT_XFERINFOFUNCTION, nullptr);
+    curl_easy_setopt(this->easy, CURLOPT_XFERINFODATA, nullptr);
+    this->event.clear();
+    this->is_cancel.reset();
+    this->report_progress = false;
+
     if (res != CURLE_OK) throw curl_error(res);
 
     long status_code = 0;
