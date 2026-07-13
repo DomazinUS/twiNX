@@ -266,22 +266,13 @@ void SwitchInputManager::updateControllerStateInner(ControllerState* state, PadS
 
     if (Application::getContentOrientation() != ContentOrientation::LANDSCAPE)
     {
-        // The left controls sit underneath the portrait grip and are easy to
-        // press accidentally. Keep the D-pad available for portrait commands,
-        // but suppress the stick, stick click, ZL, L and Minus.
-        state->axes[LEFT_X] = 0;
-        state->axes[LEFT_Y] = 0;
-        state->buttons[BUTTON_LT] = false;
-        state->buttons[BUTTON_LB] = false;
-        state->buttons[BUTTON_LSB] = false;
-        state->buttons[BUTTON_BACK] = false;
-        state->buttons[BUTTON_UP] = false;
-        state->buttons[BUTTON_DOWN] = false;
-
-        state->buttons[BUTTON_NAV_UP] = false;
-        state->buttons[BUTTON_NAV_RIGHT] = keysDown & HidNpadButton_Right;
-        state->buttons[BUTTON_NAV_DOWN] = false;
-        state->buttons[BUTTON_NAV_LEFT] = keysDown & HidNpadButton_Left;
+        // Portrait mode is touch-first. Suppress every application-visible
+        // Joy-Con input so the grip cannot trigger accidental actions. The
+        // system Home button is handled by Horizon and remains available.
+        for (size_t i = 0; i < _BUTTON_MAX; i++)
+            state->buttons[i] = false;
+        for (size_t i = 0; i < _AXES_MAX; i++)
+            state->axes[i] = 0;
     }
 
     state->axes[LEFT_Z]  = 0; // SWITCH NOT SUPPORT ZL AXIS

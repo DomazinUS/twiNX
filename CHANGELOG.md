@@ -29,6 +29,11 @@ history.
 - Added inline emote images to the portrait message draft.
 - Added adjustable touch-keyboard Joy-Con haptic feedback.
 - Added an on-screen **Send** button to the full Twitch emote composer.
+- Added live search by broadcaster or game/category name, including current
+  viewer counts.
+- Added an audio-only live quality option.
+- Added experimental audio-reactive Joy-Con vibration with Balanced, Quiet,
+  Extreme and High Peaks Only profiles.
 
 ### Changed
 
@@ -37,9 +42,8 @@ history.
   with the broadcaster's stream.
 - Promoted the tested portrait-mode work from an isolated experiment into the
   production twiNX application.
-- Suppressed the left analog stick, stick click, `L`, `ZL`, `Minus` and the two
-  inward-facing left Joy-Con buttons while in portrait mode to prevent accidental
-  input.
+- Suppressed application-visible Joy-Con input while in portrait mode to prevent
+  accidental actions; the system Home button remains available.
 - Restored all production metadata, OAuth data and preferences to the existing
   `twiNX` application and `/config/TwiNX/` paths.
 - Updated Nintendo Switch application metadata to version `0.9.0`.
@@ -57,6 +61,14 @@ history.
   diagnostics disabled in release builds.
 - Eliminated duplicate hidden-panel chat layout work so high-activity channels
   update only the visible docked, overlay or portrait chat panel.
+- Limited retained chat history to the visible row pool to reduce high-activity
+  layout and image work.
+- Restored controller focus immediately when returning from portrait to landscape.
+- Stabilized rapid quality-selector changes so only the final selected quality
+  reloads the live stream.
+- Made Software, Hardware and Hybrid decoder selections reload the active stream
+  immediately while discarding stale recovery state from the previous mode.
+- Fixed live search results showing zero viewers and admitting offline channels.
 - Prevented Twitch live streams from writing unnecessary MPV watch-later state.
 - Retained the existing guarded hardware playback stack while removing the
   commercial presentation that most frequently triggered unsafe transitions.

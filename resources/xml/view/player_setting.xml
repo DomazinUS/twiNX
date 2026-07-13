@@ -49,6 +49,10 @@
                         id="setting/portrait/orientation" />
                     <brls:SelectorCell
                         id="setting/portrait/keyboard_haptic" />
+                    <brls:BooleanCell
+                        id="setting/twitch/audio_reactive_haptics" />
+                    <brls:SelectorCell
+                        id="setting/twitch/audio_reactive_profile" />
                     <brls:SelectorCell
                         id="setting/twitch/chat_mode" />
                     <brls:SelectorCell

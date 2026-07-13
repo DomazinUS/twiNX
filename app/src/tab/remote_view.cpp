@@ -30,6 +30,7 @@
 #include <chrono>
 #include <cctype>
 #include <cmath>
+#include <cstdlib>
 #include <thread>
 #include <unordered_map>
 #include <vector>
@@ -410,7 +411,12 @@ public:
         }
 
         this->setWidth(contentWidth);
-        this->setHeight(estimateHeight());
+        this->setHeight(
+            estimateHeightFor(
+                message,
+                preferences,
+                contentWidth,
+                contentHeightLimit));
         this->setVisibility(brls::Visibility::VISIBLE);
         this->invalidate();
     }
@@ -420,6 +426,155 @@ public:
         message = {};
         this->setHeight(0);
         this->setVisibility(brls::Visibility::GONE);
+    }
+
+    static float estimateHeightFor(
+        const twitch::ChatMessage& message,
+        const twitch::ChatPreferences& preferences,
+        float availableWidth,
+        float availableHeight) {
+        const float fontSize = preferences.fontSize;
+        const float contentWidth =
+            std::max(100.0f, availableWidth);
+        const float contentHeightLimit =
+            std::max(
+                fontSize * 1.28f + 7.0f,
+                availableHeight);
+        const float lineHeight = fontSize * 1.28f;
+        const float emoteSize =
+            std::max(18.0f, fontSize * 1.35f);
+        const float badgeSize =
+            std::max(15.0f, fontSize * 1.05f);
+        const int maxLines =
+            maxLineCountFor(fontSize, contentHeightLimit);
+
+        NVGcontext* vg = brls::Application::getNVGContext();
+        if (!vg)
+            return lineHeight + 7.0f;
+
+        nvgSave(vg);
+        nvgFontFaceId(
+            vg,
+            brls::Application::getDefaultFont());
+        nvgFontSize(vg, fontSize);
+        nvgTextAlign(
+            vg,
+            NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
+
+        auto textWidth = [&](const std::string& value) {
+            if (value.empty()) return 0.0f;
+            float bounds[4]{};
+            return nvgTextBounds(
+                vg,
+                0,
+                0,
+                value.c_str(),
+                nullptr,
+                bounds);
+        };
+
+        float cursor = 0.0f;
+        int lineCount = 1;
+
+        auto nextLine = [&]() {
+            cursor = 0.0f;
+            lineCount =
+                std::min(lineCount + 1, maxLines);
+        };
+
+        auto consumeWord = [&](const std::string& value) {
+            if (value.empty() || lineCount >= maxLines + 1)
+                return;
+
+            const float wordWidth = textWidth(value);
+
+            if (cursor > 0.0f &&
+                cursor + wordWidth > contentWidth)
+                nextLine();
+
+            cursor += wordWidth;
+        };
+
+        auto consumeWrappedText =
+            [&](const std::string& value) {
+                std::string token;
+
+                for (size_t index = 0;
+                     index < value.size();
+                     ++index) {
+                    token.push_back(value[index]);
+
+                    const bool boundary =
+                        value[index] == ' ' ||
+                        value[index] == '\n' ||
+                        index + 1 == value.size();
+
+                    if (!boundary) continue;
+
+                    if (!token.empty() &&
+                        token.back() == '\n') {
+                        token.pop_back();
+                        consumeWord(token);
+                        token.clear();
+
+                        if (lineCount < maxLines)
+                            nextLine();
+                    } else {
+                        consumeWord(token);
+                        token.clear();
+                    }
+
+                    if (lineCount >= maxLines)
+                        break;
+                }
+            };
+
+        if (preferences.timestamps &&
+            !message.timestamp.empty()) {
+            consumeWord(
+                "[" + message.timestamp + "] ");
+        }
+
+        const size_t displayedBadges =
+            std::min<size_t>(
+                message.badges.size(),
+                6);
+
+        for (size_t badgeIndex = 0;
+             badgeIndex < displayedBadges;
+             ++badgeIndex) {
+            if (cursor > 0.0f &&
+                cursor + badgeSize > contentWidth)
+                nextLine();
+
+            cursor += badgeSize + 3.0f;
+        }
+
+        consumeWord(message.userName + ": ");
+
+        for (const auto& fragment : message.fragments) {
+            if (lineCount >= maxLines) break;
+
+            if (fragment.type ==
+                twitch::ChatFragmentType::Emote) {
+                if (cursor > 0.0f &&
+                    cursor + emoteSize > contentWidth)
+                    nextLine();
+
+                cursor += emoteSize + 3.0f;
+            } else {
+                consumeWrappedText(fragment.text);
+            }
+        }
+
+        nvgRestore(vg);
+
+        return std::clamp(
+                   lineCount,
+                   1,
+                   maxLines) *
+                   lineHeight +
+               7.0f;
     }
 
     void draw(
@@ -624,7 +779,9 @@ public:
     }
 
 private:
-    int maxLineCount() const {
+    static int maxLineCountFor(
+        float fontSize,
+        float contentHeightLimit) {
         const float lineHeight = fontSize * 1.28f;
         return std::max(
             1,
@@ -634,141 +791,19 @@ private:
                     std::max(1.0f, lineHeight))));
     }
 
+    int maxLineCount() const {
+        return maxLineCountFor(fontSize, contentHeightLimit);
+    }
+
     float estimateHeight() const {
-        const float lineHeight = fontSize * 1.28f;
-        const float emoteSize =
-            std::max(18.0f, fontSize * 1.35f);
-        const float badgeSize =
-            std::max(15.0f, fontSize * 1.05f);
-        const int maxLines = maxLineCount();
-
-        NVGcontext* vg = brls::Application::getNVGContext();
-        if (!vg)
-            return lineHeight + 7.0f;
-
-        nvgSave(vg);
-        nvgFontFaceId(
-            vg,
-            brls::Application::getDefaultFont());
-        nvgFontSize(vg, fontSize);
-        nvgTextAlign(
-            vg,
-            NVG_ALIGN_LEFT | NVG_ALIGN_BASELINE);
-
-        auto textWidth = [&](const std::string& value) {
-            if (value.empty()) return 0.0f;
-            float bounds[4]{};
-            return nvgTextBounds(
-                vg,
-                0,
-                0,
-                value.c_str(),
-                nullptr,
-                bounds);
-        };
-
-        float cursor = 0.0f;
-        int lineCount = 1;
-
-        auto nextLine = [&]() {
-            cursor = 0.0f;
-            lineCount =
-                std::min(lineCount + 1, maxLines);
-        };
-
-        auto consumeWord = [&](const std::string& value) {
-            if (value.empty() || lineCount >= maxLines + 1)
-                return;
-
-            const float wordWidth = textWidth(value);
-
-            if (cursor > 0.0f &&
-                cursor + wordWidth > contentWidth)
-                nextLine();
-
-            cursor += wordWidth;
-        };
-
-        auto consumeWrappedText =
-            [&](const std::string& value) {
-                std::string token;
-
-                for (size_t index = 0;
-                     index < value.size();
-                     ++index) {
-                    token.push_back(value[index]);
-
-                    const bool boundary =
-                        value[index] == ' ' ||
-                        value[index] == '\n' ||
-                        index + 1 == value.size();
-
-                    if (!boundary) continue;
-
-                    if (!token.empty() &&
-                        token.back() == '\n') {
-                        token.pop_back();
-                        consumeWord(token);
-                        token.clear();
-
-                        if (lineCount < maxLines)
-                            nextLine();
-                    } else {
-                        consumeWord(token);
-                        token.clear();
-                    }
-
-                    if (lineCount >= maxLines)
-                        break;
-                }
-            };
-
-        if (showTimestamp &&
-            !message.timestamp.empty()) {
-            consumeWord(
-                "[" + message.timestamp + "] ");
-        }
-
-        const size_t displayedBadges =
-            std::min<size_t>(
-                message.badges.size(),
-                6);
-
-        for (size_t badgeIndex = 0;
-             badgeIndex < displayedBadges;
-             ++badgeIndex) {
-            if (cursor > 0.0f &&
-                cursor + badgeSize > contentWidth)
-                nextLine();
-
-            cursor += badgeSize + 3.0f;
-        }
-
-        consumeWord(message.userName + ": ");
-
-        for (const auto& fragment : message.fragments) {
-            if (lineCount >= maxLines) break;
-
-            if (fragment.type ==
-                twitch::ChatFragmentType::Emote) {
-                if (cursor > 0.0f &&
-                    cursor + emoteSize > contentWidth)
-                    nextLine();
-
-                cursor += emoteSize + 3.0f;
-            } else {
-                consumeWrappedText(fragment.text);
-            }
-        }
-
-        nvgRestore(vg);
-
-        return std::clamp(
-                   lineCount,
-                   1,
-                   maxLines) *
-                   lineHeight +
-               7.0f;
+        twitch::ChatPreferences preferences;
+        preferences.fontSize = fontSize;
+        preferences.timestamps = showTimestamp;
+        return estimateHeightFor(
+            message,
+            preferences,
+            contentWidth,
+            contentHeightLimit);
     }
 
     void clearEmotes() {
@@ -1518,6 +1553,10 @@ public:
         refresh();
     }
 
+    const std::deque<twitch::ChatMessage>& visibleMessages() const {
+        return messages;
+    }
+
     float width() const { return panelWidth; }
 
     void setPortraitFrame(float width, float height) {
@@ -1557,18 +1596,12 @@ private:
              iterator != messages.rend() &&
              selected.size() < rows.size();
              ++iterator) {
-            // Configure a temporary row measurement using the exact same
-            // NanoVG layout rules as the renderer. This prevents the panel
-            // from selecting more messages than the available height can
-            // actually contain.
-            rows.front()->configure(
+            const float measuredHeight =
+                TwitchChatMessageView::estimateHeightFor(
                 *iterator,
                 preferences,
                 innerWidth,
                 availableHeight);
-            const float measuredHeight =
-                rows.front()->getHeight();
-            rows.front()->clear();
 
             if (!selected.empty() &&
                 consumed + measuredHeight > availableHeight)
@@ -1579,6 +1612,7 @@ private:
         }
 
         std::reverse(selected.begin(), selected.end());
+        std::deque<twitch::ChatMessage> visibleMessages;
         for (size_t index = 0;
              index < selected.size() && index < rows.size();
              ++index) {
@@ -1587,11 +1621,14 @@ private:
                 preferences,
                 innerWidth,
                 availableHeight);
+            visibleMessages.push_back(*selected[index]);
         }
+
+        messages = std::move(visibleMessages);
     }
 
     static constexpr size_t ROW_POOL = 20;
-    static constexpr size_t MAX_MESSAGES = 72;
+    static constexpr size_t MAX_MESSAGES = ROW_POOL;
 
     bool docked = false;
     float panelWidth = 330.0f;
@@ -1614,7 +1651,12 @@ struct ChatUiState {
     std::string status;
 
     void append(twitch::ChatMessage message) {
-        if (activePanel) activePanel->append(message);
+        if (activePanel) {
+            activePanel->append(std::move(message));
+            messages = activePanel->visibleMessages();
+            return;
+        }
+
         messages.push_back(std::move(message));
         while (messages.size() > MAX_MESSAGES)
             messages.pop_front();
@@ -1632,11 +1674,12 @@ struct ChatUiState {
         if (!activePanel) return;
 
         activePanel->replaceMessages(messages);
+        messages = activePanel->visibleMessages();
         activePanel->setStatus(status);
     }
 
 private:
-    static constexpr size_t MAX_MESSAGES = 72;
+    static constexpr size_t MAX_MESSAGES = 20;
 };
 
 
@@ -1746,7 +1789,9 @@ void scheduleHybridHardwareRestore(
                         brls::sync([state, generation]() {
                             if (!state->alive.load() ||
                                 generation !=
-                                    state->restoreGeneration.load())
+                                    state->restoreGeneration.load() ||
+                                twitch::loadDecoderMode() !=
+                                    twitch::DecoderMode::Hybrid)
                                 return;
 
                             auto& mpv = MPVCore::instance();
@@ -1782,6 +1827,96 @@ void scheduleHybridHardwareRestore(
                                 "twiNX Hybrid: hardware decoding restored");
                         });
                     });
+            });
+        });
+}
+
+bool isAudioOnlyQuality(const std::string& value) {
+    std::string normalized;
+    normalized.reserve(value.size());
+    for (unsigned char c : value) {
+        if (std::isalnum(c))
+            normalized.push_back(
+                static_cast<char>(std::tolower(c)));
+    }
+    return normalized == "audioonly";
+}
+
+void scheduleTwitchHardwareActivationCheck(
+    const std::shared_ptr<TwitchPlaybackRecoveryState>& state,
+    twitch::DecoderMode decoderMode) {
+    if (!state || !state->alive.load() ||
+        !twitch::decoderUsesHardware(decoderMode) ||
+        state->hybridSoftware.load())
+        return;
+
+    ThreadPool::instance().submit(
+        [state, decoderMode](HTTP&) {
+            for (int elapsed = 0;
+                 elapsed < 8 && state->alive.load();
+                 ++elapsed) {
+                std::this_thread::sleep_for(
+                    std::chrono::seconds(1));
+            }
+
+            if (!state->alive.load()) return;
+
+            brls::sync([state, decoderMode]() {
+                if (!state->alive.load() ||
+                    state->hybridSoftware.load() ||
+                    twitch::loadDecoderMode() != decoderMode)
+                    return;
+
+                auto& mpv = MPVCore::instance();
+                const std::string codec = mpv.getString("video-codec");
+                const int64_t width = mpv.getInt("video-params/w");
+                const int64_t height = mpv.getInt("video-params/h");
+                const std::string active =
+                    mpv.getString("hwdec-current");
+
+                if (isAudioOnlyQuality(twitch::loadPreferredQuality())) {
+                    brls::Logger::info(
+                        "twiNX: skipping hardware activation warning for "
+                        "explicit audio-only playback");
+                    return;
+                }
+
+                if (codec.empty() || width <= 0 || height <= 0) {
+                    brls::Logger::info(
+                        "twiNX: hardware activation check postponed; "
+                        "no video stream is active yet "
+                        "(codec='{}' size={}x{})",
+                        codec,
+                        static_cast<long long>(width),
+                        static_cast<long long>(height));
+                    return;
+                }
+
+                if (active.empty() || active == "no") {
+                    brls::Logger::warning(
+                        "twiNX: Twitch hardware decoder did not activate; "
+                        "hwdec-current='{}'",
+                        active.empty() ? "<empty>" : active);
+
+                    if (decoderMode == twitch::DecoderMode::Hybrid) {
+                        state->hybridSoftware.store(true);
+                        state->hardwareDecode.store(false);
+                        mpv.command("set", "hwdec", "no");
+                        brls::Application::notify(
+                            "twiNX Hybrid: hardware did not activate; "
+                            "continuing in software");
+                    } else {
+                        brls::Application::notify(
+                            "twiNX warning: experimental hardware "
+                            "decoding did not activate");
+                    }
+                    return;
+                }
+
+                state->hardwareDecode.store(true);
+                brls::Logger::info(
+                    "twiNX: Twitch hardware decoder active: {}",
+                    active);
             });
         });
 }
@@ -2347,35 +2482,6 @@ public:
                 },
                 false);
 
-            portraitDpadLeftAction = this->registerAction(
-                "",
-                brls::BUTTON_LEFT,
-                [this](brls::View*) {
-                    return handlePortraitDpad(false);
-                },
-                true);
-            portraitDpadRightAction = this->registerAction(
-                "",
-                brls::BUTTON_RIGHT,
-                [this](brls::View*) {
-                    return handlePortraitDpad(true);
-                },
-                true);
-            portraitNavLeftAction = this->registerAction(
-                "",
-                brls::BUTTON_NAV_LEFT,
-                [this](brls::View*) {
-                    return handlePortraitDpad(false);
-                },
-                true);
-            portraitNavRightAction = this->registerAction(
-                "",
-                brls::BUTTON_NAV_RIGHT,
-                [this](brls::View*) {
-                    return handlePortraitDpad(true);
-                },
-                true);
-
             channelSubscribeID =
                 view->getChannelEvent()->subscribe(
                     [this]() {
@@ -2483,22 +2589,9 @@ public:
                                     ? "hybrid-hardware"
                                     : "twitch-experimental-hardware");
 #endif
-
-                            const std::string activeHwdec =
-                                MPVCore::instance().getString(
-                                    "hwdec-current");
-                            if (activeHwdec == "no") {
-                                brls::Application::notify(
-                                    decoderMode == twitch::DecoderMode::Hybrid
-                                        ? "twiNX Hybrid: hardware did not activate; "
-                                          "continuing in software"
-                                        : "twiNX warning: experimental hardware "
-                                          "decoding did not activate");
-                                if (decoderMode == twitch::DecoderMode::Hybrid) {
-                                    playbackRecovery->hybridSoftware.store(true);
-                                    playbackRecovery->hardwareDecode.store(false);
-                                }
-                            }
+                            scheduleTwitchHardwareActivationCheck(
+                                playbackRecovery,
+                                decoderMode);
                         }
                     }
                 }
@@ -2549,6 +2642,7 @@ public:
     }
 
     ~RemotePlayer() override {
+        shutdownAudioReactiveHaptics();
 #if defined(TWINX_PLAYBACK_DEBUG)
         twinx::debug::log(
             "TW_PLAYER",
@@ -2604,26 +2698,6 @@ public:
             chatModeAction = ACTION_NONE;
         }
 
-        if (portraitDpadLeftAction != ACTION_NONE) {
-            this->unregisterAction(portraitDpadLeftAction);
-            portraitDpadLeftAction = ACTION_NONE;
-        }
-
-        if (portraitDpadRightAction != ACTION_NONE) {
-            this->unregisterAction(portraitDpadRightAction);
-            portraitDpadRightAction = ACTION_NONE;
-        }
-
-        if (portraitNavLeftAction != ACTION_NONE) {
-            this->unregisterAction(portraitNavLeftAction);
-            portraitNavLeftAction = ACTION_NONE;
-        }
-
-        if (portraitNavRightAction != ACTION_NONE) {
-            this->unregisterAction(portraitNavRightAction);
-            portraitNavRightAction = ACTION_NONE;
-        }
-
         if (chatUi) chatUi->alive.store(false);
         chatClient.reset();
         if (!this->twitchChannel.empty()) {
@@ -2660,6 +2734,8 @@ public:
     }
 
     void willDisappear(bool resetState) override {
+        twinx::haptics::stopAudioReactive();
+        audioReactiveOutputActive = false;
 #ifdef ANDROID
         if (brls::Application::getThemeVariant() == brls::ThemeVariant::LIGHT)
             brls::Application::getTheme().addColor("brls/clear", nvgRGBA(235, 235, 235, 255));
@@ -2674,6 +2750,11 @@ public:
 #endif
         if (!this->twitchChannel.empty())
             restorePlaybackFocus();
+    }
+
+    void frame(brls::FrameContext* ctx) override {
+        brls::Box::frame(ctx);
+        updateAudioReactiveHaptics();
     }
 
     void setList(const DirList& list, size_t index, const std::string& extra) {
@@ -3001,18 +3082,9 @@ public:
             portraitComposer->setEmotePanelVisible(false);
 
         applyChatPreferences(currentChatPreferences);
-    }
 
-    bool handlePortraitDpad(bool physicalRight) {
-        if (!portraitLayout || !portraitComposer) return false;
-
-        const bool screenUp =
-            portraitOrientation ==
-                twinx::portrait::DisplayOrientation::PortraitCounterClockwise
-                ? physicalRight
-                : !physicalRight;
-        portraitComposer->setEmotePanelVisible(screenUp);
-        return true;
+        if (!portraitLayout)
+            brls::Application::giveFocus(view);
     }
 
     void applyTwitchVideoLayout(
@@ -3204,6 +3276,155 @@ public:
     }
 
 private:
+    void updateAudioReactiveHaptics() {
+        if (twitchChannel.empty()) return;
+
+        auto& mpv = MPVCore::instance();
+        const bool enabled = twinx::haptics::audioReactiveEnabled();
+        if (!enabled) {
+            if (audioReactiveFilterInstalled) {
+                mpv.command("af", "remove", "@twinx_haptics");
+                audioReactiveFilterInstalled = false;
+            }
+            if (audioReactiveOutputActive) {
+                twinx::haptics::stopAudioReactive();
+                audioReactiveOutputActive = false;
+            }
+            audioReactiveBaselineReady = false;
+            return;
+        }
+
+        const auto now = std::chrono::steady_clock::now();
+        if (!audioReactiveFilterInstalled) {
+            mpv.command(
+                "af",
+                "add",
+                "@twinx_haptics:lavfi=[astats=length=0.02:metadata=1:"
+                "reset=1:measure_perchannel=none:"
+                "measure_overall=RMS_level+Peak_level]");
+            audioReactiveFilterInstalled = true;
+            audioReactiveBaselineReady = false;
+            nextAudioReactiveSample = now + std::chrono::milliseconds(250);
+            brls::Logger::info(
+                "twiNX: audio-reactive loudness meter enabled");
+            return;
+        }
+
+        if (now < nextAudioReactiveSample) return;
+        nextAudioReactiveSample = now + std::chrono::milliseconds(20);
+
+        const auto metadata = mpv.getNodeStringMap(
+            "af-metadata/twinx_haptics");
+        const auto rmsEntry = metadata.find(
+            "lavfi.astats.Overall.RMS_level");
+        const auto peakEntry = metadata.find(
+            "lavfi.astats.Overall.Peak_level");
+        if (rmsEntry == metadata.end() || peakEntry == metadata.end()) {
+            if (audioReactiveOutputActive) {
+                twinx::haptics::stopAudioReactive();
+                audioReactiveOutputActive = false;
+            }
+            return;
+        }
+
+        auto parseLevel = [](const std::string& value, double& result) {
+            char* end = nullptr;
+            result = std::strtod(value.c_str(), &end);
+            return end != value.c_str() && std::isfinite(result) &&
+                   result <= 0.0 && result >= -120.0;
+        };
+
+        double levelDb = -120.0;
+        double peakDb = -120.0;
+        if (!parseLevel(rmsEntry->second, levelDb) ||
+            !parseLevel(peakEntry->second, peakDb)) {
+            if (audioReactiveOutputActive) {
+                twinx::haptics::stopAudioReactive();
+                audioReactiveOutputActive = false;
+            }
+            return;
+        }
+
+        if (!audioReactiveBaselineReady) {
+            audioReactiveBaselineDb = levelDb;
+            audioReactiveBaselineReady = true;
+            return;
+        }
+
+        const double riseAboveBaseline =
+            levelDb - audioReactiveBaselineDb;
+        const double baselineRate =
+            levelDb < audioReactiveBaselineDb ? 0.16 : 0.018;
+        audioReactiveBaselineDb +=
+            (levelDb - audioReactiveBaselineDb) * baselineRate;
+
+        const double fastTransient = std::max(
+            riseAboveBaseline,
+            peakDb - audioReactiveBaselineDb - 9.0);
+
+        double thresholdDb = 2.5;
+        double spanDb = 14.0;
+        double maximum = 0.72;
+        bool absolutePeakRequired = false;
+        switch (twinx::haptics::audioReactiveProfile()) {
+        case twinx::haptics::AudioReactiveProfile::Quiet:
+            thresholdDb = 4.0;
+            spanDb = 16.0;
+            maximum = 0.35;
+            break;
+        case twinx::haptics::AudioReactiveProfile::Extreme:
+            thresholdDb = 1.0;
+            spanDb = 8.0;
+            maximum = 1.0;
+            break;
+        case twinx::haptics::AudioReactiveProfile::HighPeaksOnly:
+            thresholdDb = 10.0;
+            spanDb = 8.0;
+            maximum = 1.0;
+            absolutePeakRequired = true;
+            break;
+        case twinx::haptics::AudioReactiveProfile::Balanced:
+        default:
+            break;
+        }
+
+        double relativePeak = std::clamp(
+            (fastTransient - thresholdDb) / spanDb,
+            0.0,
+            1.0);
+        if (absolutePeakRequired && peakDb < -7.0)
+            relativePeak = 0.0;
+
+        const double silenceGate = std::clamp(
+            (peakDb + 50.0) / 18.0,
+            0.0,
+            1.0);
+        const float intensity = static_cast<float>(
+            relativePeak * silenceGate * maximum);
+
+        if (intensity < 0.06f) {
+            if (audioReactiveOutputActive) {
+                twinx::haptics::stopAudioReactive();
+                audioReactiveOutputActive = false;
+            }
+            return;
+        }
+
+        twinx::haptics::setAudioReactiveLevel(intensity);
+        audioReactiveOutputActive = true;
+    }
+
+    void shutdownAudioReactiveHaptics() {
+        twinx::haptics::stopAudioReactive();
+        audioReactiveOutputActive = false;
+        if (audioReactiveFilterInstalled) {
+            MPVCore::instance().command(
+                "af", "remove", "@twinx_haptics");
+            audioReactiveFilterInstalled = false;
+        }
+        audioReactiveBaselineReady = false;
+    }
+
     VideoView* view = new VideoView();
     std::string url;
     std::string twitchChannel;
@@ -3229,10 +3450,11 @@ private:
     twitch::ChatPreferences currentChatPreferences;
     brls::ActionIdentifier chatSendAction = ACTION_NONE;
     brls::ActionIdentifier chatModeAction = ACTION_NONE;
-    brls::ActionIdentifier portraitDpadLeftAction = ACTION_NONE;
-    brls::ActionIdentifier portraitDpadRightAction = ACTION_NONE;
-    brls::ActionIdentifier portraitNavLeftAction = ACTION_NONE;
-    brls::ActionIdentifier portraitNavRightAction = ACTION_NONE;
+    bool audioReactiveFilterInstalled = false;
+    bool audioReactiveOutputActive = false;
+    bool audioReactiveBaselineReady = false;
+    double audioReactiveBaselineDb = -60.0;
+    std::chrono::steady_clock::time_point nextAudioReactiveSample{};
     uint64_t playbackSessionId = 0;
     bool portraitLayout = false;
     float portraitVideoHeight = 405.0f;

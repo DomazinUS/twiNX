@@ -1298,15 +1298,16 @@ void TwiNXHome::showAbout() {
     addBody(
         "• Twitch sign-in and followed-channel browsing\n"
         "• Separate live and offline followed-channel rows\n"
-        "• Popular streams, categories and channel search\n"
+        "• Popular streams, categories and live search by channel or game with viewer counts\n"
         "• Detailed channel pages with broadcasts, clips and categories\n"
-        "• Live, VOD and clip playback with quality selection\n"
+        "• Live, VOD and clip playback with video and audio-only quality selection\n"
         "• Embedded-player live resolution without the commercial-break slate\n"
-        "• Guarded software, hardware and Hybrid decoder modes\n"
-        "• Automatic Joy-Con portrait orientation in either direction\n"
-        "• Portrait stream, chat, draft, emote sheet and inline touch keyboard\n"
+        "• Selectable Software, Hardware and Hybrid playback modes\n"
+        "• Automatic portrait mode using attached Joy-Con motion sensors, with either rotation supported\n"
+        "• Smartphone-style portrait player combining video, live chat, a persistent message draft, inline touch keyboard and emote sheet\n"
         "• Live chat with badges, static/animated emotes and message composer\n"
-        "• Adjustable touch-keyboard haptic feedback\n"
+        "• Touch controls for switching between the portrait keyboard and emote sheet\n"
+        "• Adjustable touch-keyboard haptics and experimental audio-reactive Joy-Con vibration\n"
         "• Docked and overlay chat, compact mode and four-corner placement\n"
         "• Controller-first navigation designed for portrait, handheld and TV play");
 
@@ -1314,7 +1315,9 @@ void TwiNXHome::showAbout() {
     addBody(
         "0.9.0 — Added automatic smartphone-style portrait mode with a persistent "
         "chat composer, inline keyboard, emote sheet and adjustable keyboard haptics. "
-        "Added a touch-accessible Send button, validated animated emotes, hardened "
+        "Added live channel/game search with viewer counts, audio-only quality, "
+        "experimental audio-reactive Joy-Con vibration profiles and a touch-accessible "
+        "Send button. Validated animated emotes, hardened "
         "MPV/FFmpeg/NVTEGRA hardware playback and switched live resolution to Twitch's "
         "embedded-player identity, avoiding the generic commercial-break presentation. "
         "Optimized high-activity chat to update only the visible chat panel.\n\n"
@@ -1405,7 +1408,7 @@ void TwiNXHome::search() {
             }
             if (!query.empty()) searchFor(query);
         },
-        "Search Twitch", "Enter a channel name", 100, "");
+        "Search Twitch", "Enter a channel or game name", 100, "");
 }
 
 void TwiNXHome::searchFor(const std::string& query) {
@@ -1423,7 +1426,7 @@ void TwiNXHome::searchFor(const std::string& query) {
             searchRow->setTitle("Search results · " + query);
             searchRow->setStreams(std::move(page.items),
                 [this](const twitch::Stream& stream) { playChannel(stream); },
-                "No Twitch channels matched “" + query + "”.");
+                "No live Twitch channels or games matched “" + query + "”.");
             searchRow->setHasMore(!searchCursor.empty());
             searchRow->onNextPage(!searchCursor.empty(), [this]() { loadMoreSearch(); });
             clearRequestError();

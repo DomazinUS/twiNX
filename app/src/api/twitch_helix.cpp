@@ -609,12 +609,42 @@ StreamPage getSearch(
     const std::string& query,
     const std::string& cursor,
     const HTTP::Cancel& cancel) {
-    return parseStreamPage(helixGet(config, session,
+    StreamPage result = parseStreamPage(helixGet(config, session,
         withCursor(
-            "https://api.twitch.tv/helix/search/channels?first=30&query=" +
+            "https://api.twitch.tv/helix/search/channels?first=30&live_only=true&query=" +
                 percentEncode(query),
             cursor),
         cancel));
+
+    // Search Channels calls the broadcaster identifier `id`; Get Streams uses
+    // `user_id`. Keep that distinction local to search result normalization.
+    for (auto& item : result.items) item.userId = item.id;
+
+    std::string liveDetailsUrl =
+        "https://api.twitch.tv/helix/streams?first=100";
+    std::unordered_set<std::string> requestedLiveIds;
+    for (const auto& item : result.items) {
+        if (!item.userId.empty() &&
+            requestedLiveIds.insert(item.userId).second) {
+            liveDetailsUrl += "&user_id=" + percentEncode(item.userId);
+        }
+    }
+
+    if (!requestedLiveIds.empty()) {
+        const StreamPage details = parseStreamPage(
+            helixGet(config, session, liveDetailsUrl, cancel));
+        std::unordered_map<std::string, int> viewerCounts;
+        for (const auto& stream : details.items) {
+            if (!stream.userId.empty()) {
+                viewerCounts.emplace(stream.userId, stream.viewerCount);
+            }
+        }
+        for (auto& item : result.items) {
+            const auto count = viewerCounts.find(item.userId);
+            if (count != viewerCounts.end()) item.viewerCount = count->second;
+        }
+    }
+    return result;
 }
 
 StreamPage getCategoryStreams(

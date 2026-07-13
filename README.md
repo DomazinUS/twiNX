@@ -33,7 +33,8 @@ presentation in supported streams.
 
 - Built-in Twitch account sign-in
 - Followed live channels and a separate offline-followed row
-- Popular streams, top categories and search
+- Popular streams, top categories and live search by channel or game
+- Current viewer counts in live search results
 - Controller-friendly horizontal rows with pagination
 - Channel artwork, stream thumbnails and account information
 
@@ -47,10 +48,12 @@ presentation in supported streams.
 ### Playback
 
 - Native Twitch live-stream, VOD and clip playback
-- Source and transcoded quality selection
+- Source, transcoded and audio-only quality selection
 - Embedded-player live resolution that avoids the generic commercial-break slate
 - Software, hardware and Hybrid decoder modes
+- Decoder changes apply immediately to the active live stream
 - Hardened MPV/FFmpeg/NVTEGRA hardware-frame handling
+- Experimental audio-reactive Joy-Con vibration with four response profiles
 - Fullscreen, docked-chat and overlay-chat layouts
 - Live streams do not create unnecessary MPV watch-later files
 
@@ -64,7 +67,6 @@ presentation in supported streams.
 - Touch keyboard/emote-sheet switching from the draft field
 - Portrait emote sheet with inline emote previews in the message draft
 - Adjustable touch-keyboard haptic feedback
-- Accidental left-side controls suppressed while holding the Switch vertically
 
 ### Live chat
 
@@ -125,6 +127,8 @@ reducing the discontinuities that previously stressed hardware decoding.
 - Automatic portrait detection requires at least one compatible attached
   Joy-Con; manual orientation remains available from player settings.
 - Hardware and Hybrid decoding remain experimental across untested stream formats.
+- Audio-reactive Joy-Con vibration is experimental; its response may lag behind
+  live audio depending on playback and output buffering.
 
 ## Building from source
 

@@ -4,13 +4,17 @@
 #include "utils/event.hpp"
 #include "utils/haptics.hpp"
 #include "utils/orientation.hpp"
+#include "utils/thread.hpp"
 #include "view/button_close.hpp"
 #include "view/mpv_core.hpp"
 #include "view/player_setting.hpp"
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <cmath>
 #include <cstdlib>
+#include <thread>
 #include <vector>
 
 using namespace brls::literals;
@@ -32,6 +36,8 @@ const std::vector<std::string>& twitchQualityValues() {
     };
     return values;
 }
+
+std::atomic_uint64_t twitchQualitySwitchGeneration{0};
 
 int twitchQualityIndex(const std::string& quality) {
     const auto& values = twitchQualityValues();
@@ -61,6 +67,13 @@ const std::vector<std::string>& portraitOrientationLabels() {
 const std::vector<std::string>& keyboardHapticLabels() {
     static const std::vector<std::string> labels = {
         "Off", "Light", "Medium", "Strong", "Maximum",
+    };
+    return labels;
+}
+
+const std::vector<std::string>& audioReactiveProfileLabels() {
+    static const std::vector<std::string> labels = {
+        "Balanced", "Quiet", "Extreme", "High peaks only",
     };
     return labels;
 }
@@ -188,6 +201,8 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
         btnTwitchDecoder->setVisibility(brls::Visibility::GONE);
         btnPortraitOrientation->setVisibility(brls::Visibility::GONE);
         btnKeyboardHaptic->setVisibility(brls::Visibility::GONE);
+        btnAudioReactiveHaptics->setVisibility(brls::Visibility::GONE);
+        btnAudioReactiveProfile->setVisibility(brls::Visibility::GONE);
         btnTwitchChatMode->setVisibility(brls::Visibility::GONE);
         btnTwitchChatParticipation->setVisibility(brls::Visibility::GONE);
         btnTwitchChatComposer->setVisibility(brls::Visibility::GONE);
@@ -210,24 +225,63 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
                     return;
 
                 const std::string quality = twitchQualityValues().at(selected);
+                const std::string qualityLabel = twitchQualityLabels().at(selected);
+                const uint64_t generation =
+                    twitchQualitySwitchGeneration.fetch_add(1) + 1;
                 if (!twitch::savePreferredQuality(quality))
                     brls::Application::notify("twiNX: could not save quality preference");
 
                 auto config = twitch::loadConfig();
                 config.channel = twitchChannel;
                 config.preferredQuality = quality;
-                brls::Application::notify("twiNX: switching Twitch quality…");
+                brls::Logger::info(
+                    "twiNX: selected Twitch quality {}; waiting for final "
+                    "selector value before reloading",
+                    qualityLabel);
 
-                twitch::resolveLiveAsync(
-                    config,
-                    [](twitch::Resolution result) {
-                        MPVCore::BOTTOM_BAR = false;
-                        MPVCore::instance().setUrl(result.selected.url, twitch::mpvExtra());
-                        brls::Application::notify(
-                            "twiNX: switched to " + result.selected.name);
-                    },
-                    [](const std::string& error) {
-                        brls::Application::notify("twiNX quality error: " + error);
+                ThreadPool::instance().submit(
+                    [config, generation](HTTP&) mutable {
+                        std::this_thread::sleep_for(
+                            std::chrono::milliseconds(650));
+
+                        if (generation != twitchQualitySwitchGeneration.load())
+                            return;
+
+                        try {
+                            auto result = twitch::resolveLive(config);
+                            brls::sync(
+                                [generation, result = std::move(result)]()
+                                    mutable {
+                                    if (generation !=
+                                        twitchQualitySwitchGeneration.load())
+                                        return;
+                                    MPVCore::BOTTOM_BAR = false;
+                                    MPVCore::instance().setUrl(
+                                        result.selected.url,
+                                        twitch::mpvExtra());
+                                    brls::Application::notify(
+                                        "twiNX: switched to " +
+                                        result.selected.name);
+                                });
+                        } catch (const std::exception& exception) {
+                            const std::string message = exception.what();
+                            brls::sync([generation, message]() {
+                                if (generation !=
+                                    twitchQualitySwitchGeneration.load())
+                                    return;
+                                brls::Application::notify(
+                                    "twiNX quality error: " + message);
+                            });
+                        } catch (...) {
+                            brls::sync([generation]() {
+                                if (generation !=
+                                    twitchQualitySwitchGeneration.load())
+                                    return;
+                                brls::Application::notify(
+                                    "twiNX quality error: unknown resolver "
+                                    "error");
+                            });
+                        }
                     });
             });
 
@@ -270,6 +324,34 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
                 twinx::haptics::keyboardPulse();
             });
 
+        btnAudioReactiveHaptics->init(
+            "Audio-reactive Joy-Con vibration (experimental)",
+            twinx::haptics::audioReactiveEnabled(),
+            [](bool enabled) {
+                if (!twinx::haptics::setAudioReactiveEnabled(enabled)) {
+                    brls::Application::notify(
+                        "twiNX: could not save audio-reactive vibration setting");
+                    return;
+                }
+                brls::Application::notify(
+                    enabled
+                        ? "twiNX: audio-reactive Joy-Con vibration enabled"
+                        : "twiNX: audio-reactive Joy-Con vibration disabled");
+            });
+
+        btnAudioReactiveProfile->init(
+            "Audio-reactive vibration profile",
+            audioReactiveProfileLabels(),
+            static_cast<int>(twinx::haptics::audioReactiveProfile()),
+            [](int selected) {
+                const auto profile =
+                    static_cast<twinx::haptics::AudioReactiveProfile>(
+                        std::clamp(selected, 0, 3));
+                if (!twinx::haptics::setAudioReactiveProfile(profile))
+                    brls::Application::notify(
+                        "twiNX: could not save vibration profile");
+            });
+
         const twitch::DecoderMode decoderMode =
             twitch::loadDecoderMode();
 
@@ -291,8 +373,6 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
 
                 auto& mpv = MPVCore::instance();
                 if (mode == twitch::DecoderMode::Software) {
-                    brls::Application::notify(
-                        "twiNX: using stable software decoding");
                     mpv.command("set", "hwdec", "no");
                 } else {
                     mpv.command("set", "vd-lavc-dr", "no");
@@ -300,19 +380,17 @@ PlayerSetting::PlayerSetting(const jellyfin::Source* src, std::string twitchChan
                         "set",
                         "hwdec",
                         MPVCore::PLAYER_HWDEC_METHOD.c_str());
-                    brls::Application::notify(
-                        mode == twitch::DecoderMode::Hybrid
-                            ? "twiNX: Hybrid starts in hardware and falls back "
-                              "to software during Twitch transitions"
-                            : "Hardware decoding is experimental and may crash "
-                              "after Twitch commercials");
                 }
+
+                brls::Application::notify(
+                    mode == twitch::DecoderMode::Software
+                        ? "twiNX: switching to software decoder..."
+                        : mode == twitch::DecoderMode::Hybrid
+                            ? "twiNX: switching to Hybrid decoder..."
+                            : "twiNX: switching to hardware decoder...");
 
                 auto config = twitch::loadConfig();
                 config.channel = twitchChannel;
-                brls::Application::notify(
-                    "twiNX: reloading stream with selected decoder…");
-
                 twitch::resolveLiveAsync(
                     config,
                     [](twitch::Resolution result) {

@@ -40,6 +40,8 @@ private:
     BRLS_BIND(brls::SelectorCell, btnTwitchDecoder, "setting/twitch/decoder");
     BRLS_BIND(brls::SelectorCell, btnPortraitOrientation, "setting/portrait/orientation");
     BRLS_BIND(brls::SelectorCell, btnKeyboardHaptic, "setting/portrait/keyboard_haptic");
+    BRLS_BIND(brls::BooleanCell, btnAudioReactiveHaptics, "setting/twitch/audio_reactive_haptics");
+    BRLS_BIND(brls::SelectorCell, btnAudioReactiveProfile, "setting/twitch/audio_reactive_profile");
     BRLS_BIND(brls::SelectorCell, btnTwitchChatMode, "setting/twitch/chat_mode");
     BRLS_BIND(brls::SelectorCell, btnTwitchChatParticipation, "setting/twitch/chat_participation");
     BRLS_BIND(brls::SelectorCell, btnTwitchChatComposer, "setting/twitch/chat_composer");

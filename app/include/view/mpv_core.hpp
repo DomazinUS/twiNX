@@ -67,6 +67,12 @@ public:
     void setInt(const std::string &key, int64_t value);
 
     std::unordered_map<std::string, mpv_node> getNodeMap(const std::string &key);
+    bool getNodeMapStringValue(
+        const std::string& property,
+        const std::string& key,
+        std::string& value);
+    std::unordered_map<std::string, std::string> getNodeStringMap(
+        const std::string& property);
 
     void togglePlay();
 

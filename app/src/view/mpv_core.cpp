@@ -1062,3 +1062,59 @@ std::unordered_map<std::string, mpv_node> MPVCore::getNodeMap(const std::string 
     }
     return nodeMap;
 }
+
+bool MPVCore::getNodeMapStringValue(
+    const std::string& property,
+    const std::string& wantedKey,
+    std::string& result) {
+    mpv_node node{};
+    if (mpv_get_property(
+            mpv,
+            property.c_str(),
+            MPV_FORMAT_NODE,
+            &node) < 0)
+        return false;
+
+    bool found = false;
+    if (node.format == MPV_FORMAT_NODE_MAP && node.u.list) {
+        const mpv_node_list* list = node.u.list;
+        for (int index = 0; index < list->num; ++index) {
+            const char* key = list->keys[index];
+            const mpv_node& value = list->values[index];
+            if (key && wantedKey == key &&
+                value.format == MPV_FORMAT_STRING && value.u.string) {
+                result = value.u.string;
+                found = true;
+                break;
+            }
+        }
+    }
+
+    mpv_free_node_contents(&node);
+    return found;
+}
+
+std::unordered_map<std::string, std::string> MPVCore::getNodeStringMap(
+    const std::string& property) {
+    mpv_node node{};
+    std::unordered_map<std::string, std::string> result;
+    if (mpv_get_property(
+            mpv,
+            property.c_str(),
+            MPV_FORMAT_NODE,
+            &node) < 0)
+        return result;
+
+    if (node.format == MPV_FORMAT_NODE_MAP && node.u.list) {
+        const mpv_node_list* list = node.u.list;
+        for (int index = 0; index < list->num; ++index) {
+            const char* key = list->keys[index];
+            const mpv_node& value = list->values[index];
+            if (key && value.format == MPV_FORMAT_STRING && value.u.string)
+                result.emplace(key, value.u.string);
+        }
+    }
+
+    mpv_free_node_contents(&node);
+    return result;
+}
