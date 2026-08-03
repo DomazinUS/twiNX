@@ -23,9 +23,10 @@ Switch homebrew. It combines native playback, Twitch browsing and interactive
 chat in an interface designed around Joy-Con, Pro Controller and touchscreen
 use in handheld, tabletop and television play.
 
-Version 0.9.0 introduces an automatic smartphone-style portrait experience and
+Version 0.9.1 includes the automatic smartphone-style portrait experience and
 embedded-player stream resolution that avoids Twitch's generic commercial-break
-presentation in supported streams.
+presentation in supported streams, plus compatibility with Twitch's current
+live playback-token query.
 
 ## Features
 
@@ -100,7 +101,9 @@ presentation in supported streams.
 3. Launch twiNX from the Nintendo Switch Homebrew Menu.
 4. Complete the built-in Twitch sign-in process.
 
-No legacy `twinx.txt` configuration file is required.
+No legacy `twinx.txt` configuration file is required. Version 0.9.1 removes old
+copies from known SD-card locations automatically so they cannot override the
+current playback resolver.
 
 ## Updating
 
@@ -168,6 +171,7 @@ Major milestones:
 - `0.8.0` - Offline followed channels
 - `0.8.1` - Correct branding, About page and complete in-app history
 - `0.9.0` - Portrait mode, embedded-player resolution and hardened hardware playback
+- `0.9.1` - Restored live playback after Twitch changed its playback-token query
 
 See [CHANGELOG.md](CHANGELOG.md) for the full release history.
 

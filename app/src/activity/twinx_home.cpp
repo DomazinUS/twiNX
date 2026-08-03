@@ -1313,6 +1313,10 @@ void TwiNXHome::showAbout() {
 
     addSection("Changelog");
     addBody(
+        "0.9.1 — Restored live playback after Twitch retired its previous "
+        "persisted playback query. Updated the resolver query and required "
+        "platform identity, and added automatic removal of obsolete twinx.txt "
+        "files so stale playback settings cannot override the built-in resolver.\n\n"
         "0.9.0 — Added automatic smartphone-style portrait mode with a persistent "
         "chat composer, inline keyboard, emote sheet and adjustable keyboard haptics. "
         "Added live channel/game search with viewer counts, audio-only quality, "
@@ -1683,7 +1687,7 @@ void TwiNXHome::playChannel(const twitch::Stream& stream) {
 void TwiNXHome::playConfiguredChannel() {
     auto config = twitch::loadConfig();
     if (config.channel.empty()) {
-        statusLabel->setText("No channel is configured in /switch/twinx.txt");
+        statusLabel->setText("No Twitch channel is selected");
         return;
     }
     twitch::Stream stream;

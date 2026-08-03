@@ -11,6 +11,27 @@ history.
 
 ---
 
+## [0.9.1]
+
+### Changed
+
+- Updated the Twitch `PlaybackAccessToken` persisted-query identifier.
+- Added Twitch's now-required `platform` variable to live playback-token requests.
+- Made the persisted-query identifier an internal resolver constant instead of a
+  user-configurable value.
+- Updated Nintendo Switch application metadata to version `0.9.1`.
+
+### Fixed
+
+- Fixed all live streams failing with `PersistedQueryNotFound` after Twitch
+  retired the previous playback-token query.
+- Added automatic one-time cleanup of obsolete `twinx.txt` files from legacy SD
+  card locations.
+- Prevented stale pre-sign-in configuration files from overriding current live
+  playback behavior.
+
+---
+
 ## [0.9.0]
 
 ### Added

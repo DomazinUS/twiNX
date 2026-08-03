@@ -17,11 +17,8 @@ struct Config {
     std::string oauthClientId = "1a0hyv0sxnwpkvde7pjyo4gpwcnwj9";
     std::string oauthScopes = "user:read:follows user:read:chat user:write:chat user:read:emotes user:read:subscriptions";
 
-    // Twitch web GraphQL identifiers used by the native playback resolver.
-    // They are configurable because Twitch can replace them.
+    // Twitch GraphQL client identifier used by the native playback resolver.
     std::string gqlClientId = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp";
-    std::string playbackHash =
-        "0828119ded1c13477966434e15800ff57ddacf13ba1911c129dc2200705b0712";
 };
 
 struct Resolution {

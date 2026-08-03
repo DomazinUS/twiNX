@@ -199,7 +199,7 @@ public:
             "Connection: Upgrade\r\n"
             "Sec-WebSocket-Key: " + key + "\r\n"
             "Sec-WebSocket-Version: 13\r\n"
-            "User-Agent: twiNX/0.9.0 (Nintendo Switch)\r\n\r\n";
+            "User-Agent: twiNX/0.9.1 (Nintendo Switch)\r\n\r\n";
 
         sendRaw(
             reinterpret_cast<const uint8_t*>(request.data()),

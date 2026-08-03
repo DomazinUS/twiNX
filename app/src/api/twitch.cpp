@@ -10,6 +10,7 @@
 #include <cctype>
 #include <filesystem>
 #include <fstream>
+#include <mutex>
 #include <random>
 #include <sstream>
 #include <stdexcept>
@@ -19,6 +20,32 @@ namespace {
 
 using json = nlohmann::json;
 namespace fs = std::filesystem;
+
+constexpr char PLAYBACK_ACCESS_TOKEN_HASH[] =
+    "ed230aa1e33e07eebb8928504583da78a5173989fadfb1ac94be06a04f3cdbe9";
+
+void removeLegacyConfigFiles() {
+#if defined(__SWITCH__)
+    static constexpr const char* LEGACY_PATHS[] = {
+        "sdmc:/switch/twinx.txt",
+        "sdmc:/switch/twiNX/twinx.txt",
+        "sdmc:/config/TwiNX/twinx.txt",
+    };
+
+    for (const char* path : LEGACY_PATHS) {
+        std::error_code error;
+        const bool removed = fs::remove(path, error);
+        if (error) {
+            brls::Logger::warning(
+                "Unable to remove obsolete twiNX config {}: {}",
+                path,
+                error.message());
+        } else if (removed) {
+            brls::Logger::info("Removed obsolete twiNX config: {}", path);
+        }
+    }
+#endif
+}
 
 std::string settingsPath() {
 #if defined(__SWITCH__)
@@ -57,7 +84,6 @@ void applyConfigLine(Config& config, const std::string& rawLine) {
     else if (key == "oauth_client_id") config.oauthClientId = value;
     else if (key == "oauth_scopes") config.oauthScopes = value;
     else if (key == "gql_client_id" || key == "client_id") config.gqlClientId = value;
-    else if (key == "playback_hash") config.playbackHash = value;
 }
 
 std::string postPlaybackToken(const Config& config) {
@@ -67,6 +93,7 @@ std::string postPlaybackToken(const Config& config) {
         {"login", config.channel},
         {"vodID", ""},
         {"playerType", config.playerType.empty() ? json(nullptr) : json(config.playerType)},
+        {"platform", "site"},
     };
 
     json request = json::array({
@@ -76,7 +103,7 @@ std::string postPlaybackToken(const Config& config) {
             {"extensions", {
                 {"persistedQuery", {
                     {"version", 1},
-                    {"sha256Hash", config.playbackHash},
+                    {"sha256Hash", PLAYBACK_ACCESS_TOKEN_HASH},
                 }},
             }},
         },
@@ -310,11 +337,11 @@ bool saveHardwareDecodeEnabled(bool enabled) {
 
 Config loadConfig() {
     Config config;
-    const std::vector<std::string> candidates = {
 #if defined(__SWITCH__)
-        "sdmc:/switch/twinx.txt",
-        "sdmc:/config/TwiNX/twinx.txt",
-#endif
+    static std::once_flag legacyCleanup;
+    std::call_once(legacyCleanup, removeLegacyConfigFiles);
+#else
+    const std::vector<std::string> candidates = {
         "twinx.txt",
     };
 
@@ -324,6 +351,7 @@ Config loadConfig() {
         for (std::string line; std::getline(input, line);) applyConfigLine(config, line);
         if (!config.channel.empty()) break;
     }
+#endif
     const std::string savedQuality = loadPreferredQuality();
     if (!savedQuality.empty()) config.preferredQuality = savedQuality;
     config.channel = normalizeChannel(config.channel);
@@ -332,16 +360,14 @@ Config loadConfig() {
 
 Resolution resolveLive(const Config& config) {
     Config clean = config;
-    // The embedded-player identity avoids Twitch's stitched commercial
-    // presentation and its disruptive media timeline transitions. Force it
-    // here so a legacy twinx.txt value cannot silently restore site playback.
+    // Keep live resolution on the embedded-player identity used by twiNX.
     clean.playerType = "embed";
     brls::Logger::info("Twitch live resolver player type: {}", clean.playerType);
     clean.channel = normalizeChannel(clean.channel);
     if (clean.channel.empty())
-        throw std::runtime_error("No Twitch channel is configured in /switch/twinx.txt");
-    if (clean.gqlClientId.empty() || clean.playbackHash.empty())
-        throw std::runtime_error("The GraphQL client ID or playback hash is empty");
+        throw std::runtime_error("No Twitch channel was selected");
+    if (clean.gqlClientId.empty())
+        throw std::runtime_error("The GraphQL client ID is empty");
 
     const auto response = postPlaybackToken(clean);
     const auto [token, signature] = parsePlaybackToken(response);
@@ -388,7 +414,7 @@ std::string mpvExtra() {
         "cache=yes",
         "cache-secs=8",
         "referrer=\"https://player.twitch.tv\"",
-        "user-agent=\"Mozilla/5.0 (Nintendo Switch; twiNX/0.9.0)\"",
+        "user-agent=\"Mozilla/5.0 (Nintendo Switch; twiNX/0.9.1)\"",
         "http-header-fields=\"Origin: https://player.twitch.tv\"",
     };
 
